@@ -15,8 +15,8 @@ Architecture: x86_64
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 4148350
+Installed-Size: 4488274
 Filename: tailscale_1.92.5_x86_64.ipk
-Size: 4148967
-SHA256sum: 643672fa724c0705dfe64365019079f32d75e59c00335985549fef79adb70941
+Size: 4489036
+SHA256sum: 9d877f38b772e7d54e07ef8a263d0b21b22256f2a19a7e657af739dc92b9dd8a
 

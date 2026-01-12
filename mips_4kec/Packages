@@ -15,8 +15,8 @@ Architecture: mips_4kec
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 3315014
+Installed-Size: 3571914
 Filename: tailscale_1.92.5_mips_4kec.ipk
-Size: 3315102
-SHA256sum: f16492b021551f9d1dbbcaae24ecc597e7eee297511c39dd55f56e19bd98de98
+Size: 3572114
+SHA256sum: 6f40be87ef44a6a195c6be6ef9c6cd297d614c98e0b100c12fbc19579c7892d2
 

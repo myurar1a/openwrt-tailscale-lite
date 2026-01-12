@@ -15,8 +15,8 @@ Architecture: arm_cortex-a7_neon-vfpv4
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 3395934
+Installed-Size: 3661010
 Filename: tailscale_1.92.5_arm_cortex-a7_neon-vfpv4.ipk
-Size: 3396686
-SHA256sum: 9f6c107e24420333568fda41fe49340bb171376d2309eaf0549e8defb6659d4d
+Size: 3661819
+SHA256sum: 60903371182640f0fd93f45e73c6f5e0859af89250b8a02130884676f9922349
 

@@ -15,8 +15,8 @@ Architecture: riscv64_riscv64
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 13174590
+Installed-Size: 14223166
 Filename: tailscale_1.92.5_riscv64_riscv64.ipk
-Size: 5130712
-SHA256sum: 7f08dc828538c16f60e1e61d65e7a89b4b928706f1a207b9f26a087e2eced395
+Size: 5562266
+SHA256sum: 9658791d7363f75b1c7ac6b57e2f0d9fedce2da6b4230cfcffcee0d4da2b66a6
 

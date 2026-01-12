@@ -15,8 +15,8 @@ Architecture: powerpc64_e5500
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 3356918
+Installed-Size: 3630582
 Filename: tailscale_1.92.5_powerpc64_e5500.ipk
-Size: 3357317
-SHA256sum: 65979610344164c1874e75acc9601e5abda19545307b0ceed08a38d72ea0476c
+Size: 3631165
+SHA256sum: 7b1df9a7475e9af93a6fcef61201a5c440f85524102e8862a3895f55bc368aa8
 

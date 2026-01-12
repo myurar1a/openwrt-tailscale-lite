@@ -15,8 +15,8 @@ Architecture: arm_cortex-a9_vfpv3-d16
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 3395934
+Installed-Size: 3661010
 Filename: tailscale_1.92.5_arm_cortex-a9_vfpv3-d16.ipk
-Size: 3396687
-SHA256sum: 98abd69b57f8eea04c2818037a312e380705d7b027b21e97846030350efaefb8
+Size: 3661825
+SHA256sum: 9ecadd96b9b10bc7e536ea9c217341df56560be21c07736c50102f8ab7e0b418
 
