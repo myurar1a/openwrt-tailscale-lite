@@ -148,7 +148,7 @@ jobs:
           TAGS_BASE="osrouter,unixsocketidentity"
           
           # networks (netstack depends on clientmetrics)
-          TAGS_NET="dns,listenrawdisco,portmapper"
+          TAGS_NET="clientmetrics,dns,listenrawdisco,portmapper"
           
           # manage
           TAGS_MANAGE="bakedroots,c2n,oauthkey"
