@@ -3,14 +3,20 @@ Package: tailscale
 Version: 1.92.5
 Depends: libc, ca-bundle, kmod-tun
 Source: https://github.com/tailscale/tailscale
+SourceName: tailscale
+License: BSD-3-Clause
+LicenseFiles: LICENSE
 Section: net
-Architecture: arm_arm1176jzf-s_vfp
+SourceDateEpoch: 1767277472
+URL: https://tailscale.com
+CPE-ID: cpe:/a:tailscale:tailscale
 Maintainer: myurar1a <megasirome181@gmail.com>
-Description: Tailscale (Small Build)
-  A mesh VPN for easy device connections anywhere.
-  Stripped down and optimized for storage-constrained OpenWrt devices.
-Installed-Size: 3393223
+Architecture: arm_arm1176jzf-s_vfp
+Description: Small Tailscale. 
+ It creates a secure network between your servers, computers,
+ and cloud instances. Even when separated by firewalls or subnets.
+Installed-Size: 3844758
 Filename: tailscale_1.92.5_arm_arm1176jzf-s_vfp.ipk
-Size: 3394229
-SHA256sum: f2298b0901e5e34b11da092a847400c052bcb839eafb657d7513b1520247ccdc
+Size: 3845714
+SHA256sum: 74dad4fd5f9e8e3db7d856d8fb2d1947ceefd6a6c5853cc3e91c63e432c7c909
 
