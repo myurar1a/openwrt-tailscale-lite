@@ -19,12 +19,43 @@ on:
         default: false
 
 jobs:
-  check-version:
+  init:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
       version: ${{ steps.check.outputs.version }}
+      build_tags: ${{ steps.define_tags.outputs.tags }}
     steps:
+      - name: Define Build Tags
+        id: define_tags
+        run: |
+          # --- 追加タグ定義 ---
+          # must
+          TAGS_BASE="osrouter,debug,unixsocketidentity"
+          
+          # networks (netstack depends on clientmetrics)
+          #TAGS_NET="dns,listenrawdisco,portmapper"
+          TAGS_NET="clientmetrics,dns,listenrawdisco,netstack,portmapper"
+          
+          # manage
+          TAGS_MANAGE="bakedroots,c2n,oauthkey"
+          
+          # os
+          TAGS_OS="iptables,linkspeed,linuxdnsfight"
+          
+          # optimize (gro depends on clientmetrics)
+          #TAGS_OPT="lazywg"
+          TAGS_OPT="gro,lazywg"
+          
+          # features
+          TAGS_FEAT="advertiseexitnode,advertiseroutes,useexitnode,useroutes"
+          
+          # utilities (ssh depends on clientmetrics)
+          TAGS_UTIL="wakeonlan"
+          
+          # 全タグをカンマ区切りで結合
+          ALL_TAGS="${TAGS_BASE},${TAGS_NET},${TAGS_MANAGE},${TAGS_OS},${TAGS_OPT},${TAGS_FEAT},${TAGS_UTIL}"
+          
       - name: Check version
         id: check
         run: |
@@ -60,8 +91,8 @@ jobs:
           fi
 
   build:
-    needs: check-version
-    if: needs.check-version.outputs.should_run == 'true'
+    needs: init
+    if: needs.init.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -121,7 +152,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: tailscale/tailscale
-          ref: ${{ needs.check-version.outputs.version }}
+          ref: ${{ needs.init.outputs.version }}
           path: tailscale-src
           fetch-depth: 0
 
@@ -142,34 +173,8 @@ jobs:
           GOARM: ${{ matrix.goarm }}
           GOMIPS: ${{ matrix.gomips }}
           CGO_ENABLED: 0
+          ALL_TAGS: ${{ needs.init.outputs.build_tags }}
         run: |
-          # --- 追加タグ定義 ---
-          # must
-          TAGS_BASE="osrouter,debug,unixsocketidentity"
-          
-          # networks (netstack depends on clientmetrics)
-          TAGS_NET="dns,listenrawdisco,portmapper"
-          #TAGS_NET="clientmetrics,dns,listenrawdisco,netstack,portmapper"
-          
-          # manage
-          TAGS_MANAGE="bakedroots,c2n,oauthkey"
-          
-          # os
-          TAGS_OS="iptables,linkspeed,linuxdnsfight"
-          
-          # optimize (gro depends on clientmetrics)
-          TAGS_OPT="lazywg"
-          #TAGS_OPT="gro,lazywg"
-          
-          # features
-          TAGS_FEAT="advertiseexitnode,advertiseroutes,useexitnode,useroutes"
-          
-          # utilities (ssh depends on clientmetrics)
-          TAGS_UTIL="wakeonlan"
-          
-          # 全タグをカンマ区切りで結合
-          ALL_TAGS="${TAGS_BASE},${TAGS_NET},${TAGS_MANAGE},${TAGS_OS},${TAGS_OPT},${TAGS_FEAT},${TAGS_UTIL}"
-          
           # --extra-small オプション処理内の featuretags 実行引数に各タグを追加
           sed -i "s/--add=osrouter/--add=${ALL_TAGS}/" build_dist.sh
 
@@ -183,7 +188,7 @@ jobs:
 
       - name: Package into IPK
         run: |
-          VERSION=${{ needs.check-version.outputs.version }}
+          VERSION=${{ needs.init.outputs.version }}
           VERSION_NUM=${VERSION#v}
           
           # 出力先ディレクトリ
@@ -254,8 +259,8 @@ jobs:
           path: "artifacts/*.ipk"
 
   release:
-    needs: [check-version, build]
-    if: needs.check-version.outputs.should_run == 'true'
+    needs: [init, build]
+    if: needs.init.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -269,20 +274,21 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.check-version.outputs.version }}
-          name: Small Tailscale ${{ needs.check-version.outputs.version }}
+          tag_name: ${{ needs.init.outputs.version }}
+          name: Small Tailscale ${{ needs.init.outputs.version }}
           body: |
             Auto-generated small build for OpenWrt.
-            Upstream: https://github.com/tailscale/tailscale/releases/tag/${{ needs.check-version.outputs.version }}
+            Upstream: https://github.com/tailscale/tailscale/releases/tag/${{ needs.init.outputs.version }}
             
+            **Build Tags:** `${{ needs.init.outputs.build_tags }}, cli`
             **Build Flags:** `--extra-small --box`
             **Compression:** UPX --best --lzma
           files: artifacts/*.ipk
           prerelease: ${{ github.ref == 'refs/heads/develop' }}
 
   deploy-repo:
-    needs: [check-version, build]
-    if: needs.check-version.outputs.should_run == 'true'
+    needs: [init, build]
+    if: needs.init.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -360,7 +366,7 @@ jobs:
           git add .
 
           # 変更がない場合のエラー回避
-          git commit -m "Update repo ${{ needs.check-version.outputs.version }}" || echo "No changes to commit"
+          git commit -m "Update repo ${{ needs.init.outputs.version }}" || echo "No changes to commit"
 
           # 強制プッシュで履歴を上書きしないとリポジトリが肥大化するため注意
           # 容量節約なら --force 推奨

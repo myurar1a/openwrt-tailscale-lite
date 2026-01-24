@@ -9,7 +9,7 @@ Automated build of a stripped-down, UPX-compressed [Tailscale](https://tailscale
   - **Small Size**: Package size is reduced to around 5MB.
   - **Multicall Binary**: Combines `tailscale` and `tailscaled` CLI into a single binary to save space.
 - **Official Build Standards**:
-  - Built using Tailscale's official `build_dist.sh` script with the `--extra-small` flag.
+  - Built using Tailscale's official `build_dist.sh` script, with the required feature tags added and the `--extra-small --box` flags.
   - Compressed using `upx --best --lzma` as recommended in the official documentation.
 
 ## Supported Architectures
@@ -50,7 +50,7 @@ tailscale status
 
 ## Auto-Update Mechanism
 
-The installer sets up a cron job that runs `~/scripts/upd-tailscale.sh` every 6 hours.
+The installer sets up a cron job that runs `~/scripts/upd-tailscale.sh` at 4 AM.
 
 - **Check**: Compares the installed version with the latest version in the repository.
 - **Safe Update**: If a new version is found, it performs a `remove` -> `install` cycle.
