@@ -283,7 +283,7 @@ jobs:
             Auto-generated small build for OpenWrt.
             Upstream: https://github.com/tailscale/tailscale/releases/tag/${{ needs.init.outputs.version }}
             
-            **Build Tags:** `${{ needs.init.outputs.build_tags }}, cli`
+            **Build Tags:** `${{ needs.init.outputs.build_tags }},cli`
             **Build Flags:** `--extra-small --box`
             **Compression:** UPX --best --lzma
           files: artifacts/*.ipk
