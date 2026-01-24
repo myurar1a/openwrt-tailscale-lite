@@ -15,8 +15,8 @@ Architecture: arm_cortex-a9
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 3837230
+Installed-Size: 3246934
 Filename: tailscale_1.92.5_arm_cortex-a9.ipk
-Size: 3838175
-SHA256sum: 81747fa31f874c30ab44435cedc403a0349f25196f6670f449fabb4d251991ab
+Size: 3247733
+SHA256sum: 51198786b2c36bb8aeaaef3fc21d8a445b32fddb62c1a79c5e4da6650156e28e
 

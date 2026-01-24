@@ -15,8 +15,8 @@ Architecture: i386_pentium-mmx
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 4446234
+Installed-Size: 3478706
 Filename: tailscale_1.92.5_i386_pentium-mmx.ipk
-Size: 4447140
-SHA256sum: dab9d8d32e8602359acb8f0065e583ece7024ea3b207df85a77bbc3e36a6fb58
+Size: 3479394
+SHA256sum: 4261cb5819d771e095764db7bd5e286a3b3d428724298d992f2e3ac39e4b093e
 
