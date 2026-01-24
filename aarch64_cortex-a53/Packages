@@ -17,6 +17,6 @@ Description: Small Tailscale.
  and cloud instances. Even when separated by firewalls or subnets.
 Installed-Size: 4486042
 Filename: tailscale_1.92.5_aarch64_cortex-a53.ipk
-Size: 4487177
-SHA256sum: 1c495ff621fb955eaa2fabcef97c85fcecce52afc894151d5eab053d94504b8b
+Size: 4487173
+SHA256sum: 3abff21e3d28b84bae4b51a35117c55fd979047435c9e4588e60d826de3a7fea
 

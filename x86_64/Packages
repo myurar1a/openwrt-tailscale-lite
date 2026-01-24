@@ -17,6 +17,6 @@ Description: Small Tailscale.
  and cloud instances. Even when separated by firewalls or subnets.
 Installed-Size: 5433430
 Filename: tailscale_1.92.5_x86_64.ipk
-Size: 5434431
-SHA256sum: 18a411a3edae39fde1eb7b4ccc1ea194a36a7eba659e5df8d7cef95cab5b50a3
+Size: 5434429
+SHA256sum: e5750d145ac8ad4d7e874b7b949c816e1ddec2b9eed43164871548235abbbcf8
 
