@@ -54,7 +54,10 @@ jobs:
           TAGS_UTIL="wakeonlan"
           
           # 全タグをカンマ区切りで結合
-          tags="${TAGS_BASE},${TAGS_NET},${TAGS_MANAGE},${TAGS_OS},${TAGS_OPT},${TAGS_FEAT},${TAGS_UTIL}"
+          ALL_TAGS="${TAGS_BASE},${TAGS_NET},${TAGS_MANAGE},${TAGS_OS},${TAGS_OPT},${TAGS_FEAT},${TAGS_UTIL}"
+          
+          echo "Tags defined: $ALL_TAGS"
+          echo "tags=$ALL_TAGS" >> $GITHUB_OUTPUT
           
       - name: Check version
         id: check
