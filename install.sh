@@ -10,16 +10,15 @@ INSTALL_PATH="$INSTALL_DIR/$CRON_SCRIPT"
 set -e
 echo "=== OpenWrt Small Tailscale Installer ==="
 
-echo "[1/9] Checking OpenWrt Version..."
+echo "[1/7] Checking OpenWrt Version..."
 
 if [ -f /etc/openwrt_release ]; then
     . /etc/openwrt_release
-    # Clean quotes from version string (e.g., "24.10.0" -> 24.10.0)
+    # Clean quotes from version string
     VERSION_STR="${DISTRIB_RELEASE//\"/}"
-    # Extract Major version (e.g., 23, 24, 25)
+    # Extract Major version
     MAJOR=$(echo "$VERSION_STR" | cut -d. -f1)
 
-    # Check if MAJOR is a number
     case $MAJOR in
         ''|*[!0-9]*) 
             echo "Warning: Could not parse version number. Proceeding with standard installation." 
@@ -28,7 +27,7 @@ if [ -f /etc/openwrt_release ]; then
             echo "Detected Major Version: $MAJOR"
 
             if [ "$MAJOR" -ge 25 ]; then
-                # Version 25+ (Future support for apk)
+                # Version 25.12+ (Future support for apk)
                 echo "--------------------------------------------------------"
                 echo "NOTICE: OpenWrt 25.12 detected."
                 echo "The package system has changed to 'apk' in this version."
@@ -38,7 +37,7 @@ if [ -f /etc/openwrt_release ]; then
                 exit 0
 
             elif [ "$MAJOR" -eq 24 ]; then
-                # Version 24 (Install ethtool)
+                # Version 24.10 (Install ethtool)
                 echo "Version 24.10 detected. Verifying ethtool..."
                 if ! opkg list-installed | grep -q "ethtool"; then
                     echo "Installing ethtool..."
@@ -46,7 +45,7 @@ if [ -f /etc/openwrt_release ]; then
                 fi
 
             else
-                # Version 23 or older (22, 23)
+                # Version 23.05 or older (22, 23)
                 echo "-----------------------------------------------------------------"
                 echo "TIPS: For optimal performance, please use OpenWrt 24.10 or later."
                 echo "-----------------------------------------------------------------"
@@ -58,26 +57,13 @@ else
 fi
 
 
-echo "[2/8] Checking dependencies..."
-if ! opkg list-installed | grep -q "curl"; then
-    opkg update && opkg install curl
-fi
-if ! opkg list-installed | grep -q "ca-bundle"; then
-    opkg update && opkg install ca-bundle
-fi
-if ! opkg list-installed | grep -q "kmod-tun"; then
-    opkg update && opkg install kmod-tun
-fi
-
-
-echo "[3/8] Detecting architecture..."
+echo "[2/7] Detecting architecture..."
 ARCH=$(opkg print-architecture | awk 'END {print $2}')
 REPO_URL="https://myurar1a.github.io/openwrt-tailscale-small/${ARCH}"
 
-# Checking repository...
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${REPO_URL}/Packages.gz")
-
-if [ "$HTTP_CODE" != "200" ]; then
+# Checking repository using wget
+# --spider checks for existence, -q is quiet
+if ! wget -q --spider --no-check-certificate "${REPO_URL}/Packages.gz"; then
     echo "Error: Repository not found for architecture '${ARCH}'."
     echo "URL: ${REPO_URL}"
     echo "Please check if your device architecture is supported in the GitHub repository."
@@ -86,31 +72,29 @@ fi
 echo "Target: $ARCH"
 
 
-echo "[4/8] Installing Public Key..."
-KEY_DIR="/etc/opkg/keys"
-if [ ! -d "$KEY_DIR" ]; then
-    mkdir -p "$KEY_DIR"
-fi
-
-# Download public key
+echo "[3/7] Installing Public Key..."
+TMP_KEY="/tmp/myurar1a-repo.pub"
 RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
 PUBKEY_NAME="myurar1a-repo.pub"
-if curl -sL "$RAW_URL/cert/$PUBKEY_NAME" -o "$KEY_DIR/$PUBKEY_NAME"; then
-    echo "Public key installed to $KEY_DIR/$PUBKEY_NAME"
+
+if wget -q --no-check-certificate -O "$TMP_KEY" "$RAW_URL/cert/$PUBKEY_NAME"; then
+    opkg-key add "$TMP_KEY"
+    echo "Public key installed via opkg-key"
+    rm "$TMP_KEY"
 else
     echo "Error: Failed to download public key."
     exit 1
 fi
 
 
-echo "[5/8] Configuring repository..."
+echo "[4/7] Configuring repository..."
 FEED_CONF="/etc/opkg/customfeeds.conf"
 if ! grep -q "custom_tailscale" "$FEED_CONF"; then
     echo "src/gz custom_tailscale ${REPO_URL}" >> "$FEED_CONF"
 fi
 
 
-echo "[6/8] Installing Tailscale..."
+echo "[5/7] Installing Tailscale..."
 if ! opkg update; then
     echo "Error: 'opkg update' failed. Signature verification might have failed."
     echo "Please check if the repository is correctly signed."
@@ -131,7 +115,7 @@ else
 fi
 
 
-echo "[7/8] Setup Auto-Update Script..."
+echo "[6/7] Setup Auto-Update Script..."
 printf "Do you want to install the auto-update script? [y/N]: "
 read INSTALL_UPDATER
 
@@ -142,12 +126,19 @@ if [ "$INSTALL_UPDATER" = "y" ] || [ "$INSTALL_UPDATER" = "Y" ]; then
         mkdir -p "$INSTALL_DIR"
     fi
 
-    curl -sL "$RAW_URL/install.sh" -o "$INSTALL_PATH"
-    chmod +x "$INSTALL_PATH"
-    echo "Script installed to $INSTALL_PATH"
+    # Download the specific update script using wget
+    UPDATER_URL="$RAW_URL/upd-tailscale.sh"
+    
+    if wget -q --no-check-certificate -O "$INSTALL_PATH" "$UPDATER_URL"; then
+        chmod +x "$INSTALL_PATH"
+        echo "Script installed to $INSTALL_PATH"
+    else
+        echo "Error: Failed to download update script."
+        exit 1
+    fi
 
     # --- Cron Schedule Section ---
-    echo "[8/8] Scheduling Cron job..."
+    echo "[7/7] Scheduling Cron job..."
     printf "Do you want to schedule a Cron job for auto-updates? [y/N]: "
     read SETUP_CRON
 
@@ -179,14 +170,66 @@ if [ "$INSTALL_UPDATER" = "y" ] || [ "$INSTALL_UPDATER" = "Y" ]; then
 
 else
     echo "Skipping auto-update script installation."
-    echo "[8/8] Skipping Cron job setup (script not installed)."
 fi
 
 echo ""
 echo "=== Installation Complete! ==="
 echo ""
 
-echo "[9/8] Tailscale Initial Setup..."
+echo "[8/7] Configuring Network & Firewall..."
+printf "Do you want to configure the 'tailscale' interface and firewall zone automatically? [y/N]: "
+read CONFIG_FW
+
+if [ "$CONFIG_FW" = "y" ] || [ "$CONFIG_FW" = "Y" ]; then
+    echo "Configuring network interface..."
+    
+    # 1. Interface Config (Safe to overwrite)
+    uci set network.tailscale=interface
+    uci set network.tailscale.proto='none'
+    uci set network.tailscale.device='tailscale0'
+    # Optional global setting mentioned in your reference
+    uci set network.globals.packet_steering='1'
+
+    # 2. Firewall Config
+    # Check if zone exists to avoid duplicates
+    if uci show firewall | grep -q "name='tailscale'"; then
+        echo "Firewall zone 'tailscale' already exists. Skipping firewall rules to prevent duplicates."
+    else
+        echo "Creating firewall zone and forwarding rules..."
+        
+        # Add Zone
+        uci add firewall zone >/dev/null
+        uci set firewall.@zone[-1].name='tailscale'
+        uci set firewall.@zone[-1].input='ACCEPT'
+        uci set firewall.@zone[-1].output='ACCEPT'
+        uci set firewall.@zone[-1].forward='ACCEPT'
+        uci set firewall.@zone[-1].masq='1'
+        uci set firewall.@zone[-1].mtu_fix='1'
+        uci add_list firewall.@zone[-1].network='tailscale'
+        
+        # Add Forwarding: Tailscale -> LAN
+        uci add firewall forwarding >/dev/null
+        uci set firewall.@forwarding[-1].src='tailscale'
+        uci set firewall.@forwarding[-1].dest='lan'
+        
+        # Add Forwarding: LAN -> Tailscale
+        uci add firewall forwarding >/dev/null
+        uci set firewall.@forwarding[-1].src='lan'
+        uci set firewall.@forwarding[-1].dest='tailscale'
+    fi
+
+    # Commit and Reload
+    uci commit network
+    uci commit firewall
+    echo "Reloading network and firewall..."
+    /etc/init.d/network reload
+    /etc/init.d/firewall reload
+    echo "Configuration applied."
+else
+    echo "Skipping network configuration."
+fi
+
+echo "[9/7] Tailscale Initial Setup..."
 printf "Do you want to run 'tailscale up' now to authenticate? [y/N]: "
 read RUN_UP
 

@@ -39,12 +39,11 @@ tailscale status
 ```
 
 ### What this installer does:
-1. Installs required dependencies (`curl`, `ca-bundle`, `kmod-tun`).
-2. Detects your router's architecture.
-3. Adds this repository to Opkg feeds.
-4. Installs the `tailscale` package.
-5. Installs an auto-update script to `~/scripts/upd-tailscale.sh`.
-6. Sets up a Cron job to check for updates every 6 hours.
+1. Detects your router's OpenWrt version and architecture.
+2. Adds this repository to Opkg feeds.
+3. Installs the `tailscale` package.
+4. Installs an auto-update script to `~/scripts/upd-tailscale.sh`.
+5. Sets up a Cron job to check for updates.
 
 ---
 
@@ -65,7 +64,9 @@ If you prefer to configure it manually:
 
 1. **Add Signature**:
    ```sh
-   curl -sL "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/myurar1a-repo.pub" -o "/etc/opkg/keys/myurar1a-repo.pub"
+   wget -q --no-check-certificate -O "/tmp/myurar1a-repo.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/myurar1a-repo.pub"
+   opkg-key add "/tmp/myurar1a-repo.pub"
+   rm "/tmp/myurar1a-repo.pub"
    ```
 
 2. **Add Repository**:
