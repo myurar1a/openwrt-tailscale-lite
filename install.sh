@@ -85,7 +85,7 @@ if [ -f /etc/openwrt_release ]; then
             print_warn "Could not parse version number. Proceeding with standard installation." 
             ;;
         *)
-            print_info "Detected Major Version: ${C_BOLD}$MAJOR${C_RESET}"
+            print_info "Detected OpenWrt Version: ${C_BOLD}$VERSION_STR${C_RESET}"
 
             if [ "$MAJOR" -ge 25 ]; then
                 # Version 25.12+ (Future support for apk)
