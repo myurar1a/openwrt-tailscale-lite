@@ -5,180 +5,234 @@ DEFAULT_CRON_SCHEDULE="0 4 * * *"
 CRON_SCRIPT="upd-tailscale.sh"
 INSTALL_DIR="$HOME/scripts"
 INSTALL_PATH="$INSTALL_DIR/$CRON_SCRIPT"
+
+# --- UI Colors & Formatting ---
+# OpenWrt ash supports echo -e for colors
+C_RESET='\033[0m'
+C_BOLD='\033[1m'
+C_RED='\033[31m'
+C_GREEN='\033[32m'
+C_YELLOW='\033[33m'
+C_BLUE='\033[36m' # Cyan for headers
+C_GREY='\033[90m'
+
+# --- UI Helper Functions ---
+
+print_header() {
+    echo ""
+    echo -e "${C_BLUE}========================================================${C_RESET}"
+    echo -e "${C_BOLD}${C_BLUE} $1 ${C_RESET}"
+    echo -e "${C_BLUE}========================================================${C_RESET}"
+}
+
+print_info() {
+    echo -e "${C_BOLD}>>${C_RESET} $1"
+}
+
+print_success() {
+    echo -e "${C_GREEN}✔ Success:${C_RESET} $1"
+}
+
+print_warn() {
+    echo -e "${C_YELLOW}⚠ Warning:${C_RESET} $1"
+}
+
+print_error() {
+    echo -e "${C_RED}✘ Error:${C_RESET} $1"
+}
+
+# Prompt function: Returns 0 for YES, 1 for NO
+# Default is YES (Enter key)
+ask_yes_no() {
+    local prompt="$1"
+    echo ""
+    # Print the question in Green/Bold to stand out
+    echo -e "${C_GREEN}[?] $prompt ${C_RESET}${C_GREY}[Y/n]${C_RESET}"
+    printf "> "
+    read response
+    
+    case "$response" in
+        [yY][eE][sS]|[yY]|"") return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # ---------------------
 
 set -e
-echo "=== OpenWrt Small Tailscale Installer ==="
 
-echo "[1/7] Checking OpenWrt Version..."
+# Clear screen for a fresh start
+clear
+
+echo -e "${C_BOLD}${C_BLUE}"
+echo "   OpenWrt Tailscale Installer   "
+echo "   (Simple & Automated Setup)    "
+echo -e "${C_RESET}"
+echo -e " * Press ${C_BOLD}ENTER${C_RESET} to accept default values (Yes)."
+echo -e " * Press ${C_BOLD}Ctrl+C${C_RESET} to abort at any time."
+
+# --- Step 1 ---
+print_header "[1/7] Checking OpenWrt Version"
 
 if [ -f /etc/openwrt_release ]; then
     . /etc/openwrt_release
     # Clean quotes from version string
     VERSION_STR="${DISTRIB_RELEASE//\"/}"
-    # Extract Major version
     MAJOR=$(echo "$VERSION_STR" | cut -d. -f1)
 
     case $MAJOR in
         ''|*[!0-9]*) 
-            echo "Warning: Could not parse version number. Proceeding with standard installation." 
+            print_warn "Could not parse version number. Proceeding with standard installation." 
             ;;
         *)
-            echo "Detected Major Version: $MAJOR"
+            print_info "Detected Major Version: ${C_BOLD}$MAJOR${C_RESET}"
 
             if [ "$MAJOR" -ge 25 ]; then
                 # Version 25.12+ (Future support for apk)
-                echo "--------------------------------------------------------"
-                echo "NOTICE: OpenWrt 25.12 detected."
-                echo "The package system has changed to 'apk' in this version."
-                echo "Support for this environment is pending validation."
-                echo "Aborting installation to prevent system issues."
-                echo "--------------------------------------------------------"
+                echo ""
+                print_error "OpenWrt 25.12+ (apk based) detected."
+                echo "   Support for this environment is pending validation."
+                echo "   Aborting installation to prevent system issues."
                 exit 0
 
             elif [ "$MAJOR" -eq 24 ]; then
                 # Version 24.10
-                # Modified: ethtool installation moved to optional step later
-                echo "Version 24.x detected."
-
+                print_success "Version 24.10 is supported."
             else
                 # Version 23.05 or older (22, 23)
-                echo "-----------------------------------------------------------------"
-                echo "TIPS: For optimal performance, please use OpenWrt 24.10 or later."
-                echo "-----------------------------------------------------------------"
+                print_warn "Old version detected. OpenWrt 24.10 is recommended for best performance."
             fi
             ;;
     esac
 else
-    echo "Warning: /etc/openwrt_release not found. Proceeding with standard installation."
+    print_warn "/etc/openwrt_release not found. Proceeding carefully."
 fi
 
 
-echo "[2/7] Detecting architecture..."
+# --- Step 2 ---
+print_header "[2/7] Detecting Architecture"
 ARCH=$(opkg print-architecture | awk 'END {print $2}')
 REPO_URL="https://myurar1a.github.io/openwrt-tailscale-small/${ARCH}"
 
-# Checking repository using wget
-# --spider checks for existence, -q is quiet
+print_info "Architecture: ${C_BOLD}${ARCH}${C_RESET}"
+print_info "Checking repository availability..."
+
 if ! wget -q --spider --no-check-certificate "${REPO_URL}/Packages.gz"; then
-    echo "Error: Repository not found for architecture '${ARCH}'."
-    echo "URL: ${REPO_URL}"
-    echo "Please check if your device architecture is supported in the GitHub repository."
+    print_error "Repository not found for architecture '${ARCH}'."
+    echo "   URL: ${REPO_URL}"
     exit 1
 fi
-echo "Target: $ARCH"
+print_success "Repository found."
 
 
-echo "[3/7] Installing Public Key..."
+# --- Step 3 ---
+print_header "[3/7] Installing Public Key"
 TMP_KEY="/tmp/myurar1a-repo.pub"
 RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
 PUBKEY_NAME="myurar1a-repo.pub"
 
 if wget -q --no-check-certificate -O "$TMP_KEY" "$RAW_URL/cert/$PUBKEY_NAME"; then
     opkg-key add "$TMP_KEY"
-    echo "Public key installed via opkg-key"
     rm "$TMP_KEY"
+    print_success "Public key installed."
 else
-    echo "Error: Failed to download public key."
+    print_error "Failed to download public key."
     exit 1
 fi
 
 
-echo "[4/7] Configuring repository..."
+# --- Step 4 ---
+print_header "[4/7] Configuring Repository"
 FEED_CONF="/etc/opkg/customfeeds.conf"
 if ! grep -q "custom_tailscale" "$FEED_CONF"; then
     echo "src/gz custom_tailscale ${REPO_URL}" >> "$FEED_CONF"
+    print_success "Repository added to customfeeds.conf"
+else
+    print_info "Repository already configured."
 fi
 
 
-echo "[5/7] Installing Tailscale..."
-if ! opkg update; then
-    echo "Error: 'opkg update' failed. Signature verification might have failed."
-    echo "Please check if the repository is correctly signed."
+# --- Step 5 ---
+print_header "[5/7] Installing Tailscale"
+print_info "Updating package lists..."
+if ! opkg update >/dev/null 2>&1; then
+    print_error "'opkg update' failed. Check internet connection or repo signature."
     exit 1
 fi
 
 INSTALLED=$(opkg list-installed tailscale | awk '{print $3}')
 if [ -n "$INSTALLED" ]; then
-    echo "Tailscale is already installed ($INSTALLED)."
-    printf "Re-install to ensure latest version? [y/N]: "
-    read ANSWER
-    if [ "$ANSWER" = "y" ] || [ "$ANSWER" = "Y" ]; then
+    print_warn "Tailscale is already installed ($INSTALLED)."
+    if ask_yes_no "Re-install/Update to ensure latest version?"; then
+        echo ""
+        echo ">> opkg remove tailscale"
         opkg remove tailscale
+        echo ""
+        echo ">> opkg install tailscale"
         opkg install tailscale
+        print_success "Tailscale re-installed."
+    else
+        print_error "Installation Canceled."
+        exit 1
     fi
 else
+    print_info "Installing Tailscale package..."
+    echo ""
+    echo ">> opkg install tailscale"
     opkg install tailscale
+    print_success "Tailscale installed."
 fi
 
 
-echo "[6/7] Setup Auto-Update Script..."
-printf "Do you want to install the auto-update script? [y/N]: "
-read INSTALL_UPDATER
+# --- Step 6 ---
+print_header "[6/7] Auto-Update Script Setup"
 
-if [ "$INSTALL_UPDATER" = "y" ] || [ "$INSTALL_UPDATER" = "Y" ]; then
+if ask_yes_no "Install auto-update script and schedule Cron job?"; then
     # Create directory if it doesn't exist
     if [ ! -d "$INSTALL_DIR" ]; then
-        echo "Creating directory: $INSTALL_DIR"
         mkdir -p "$INSTALL_DIR"
     fi
 
-    # Download the specific update script using wget
+    # Download script
     UPDATER_URL="$RAW_URL/upd-tailscale.sh"
-    
     if wget -q --no-check-certificate -O "$INSTALL_PATH" "$UPDATER_URL"; then
         chmod +x "$INSTALL_PATH"
-        echo "Script installed to $INSTALL_PATH"
+        print_success "Script downloaded to $INSTALL_PATH"
     else
-        echo "Error: Failed to download update script."
+        print_error "Failed to download update script."
         exit 1
     fi
 
-    # --- Cron Schedule Section ---
-    echo "[7/7] Scheduling Cron job..."
-    printf "Do you want to schedule a Cron job for auto-updates? [y/N]: "
-    read SETUP_CRON
-
-    if [ "$SETUP_CRON" = "y" ] || [ "$SETUP_CRON" = "Y" ]; then
-        if crontab -l 2>/dev/null | grep -q "$INSTALL_PATH"; then
-            echo "Cron job already exists for this script."
-        else
-            FINAL_SCHEDULE="$DEFAULT_CRON_SCHEDULE"
-            
-            printf "Default schedule is '$DEFAULT_CRON_SCHEDULE' (4:00 AM). Use custom schedule? [y/N]: "
-            read CUSTOM_OPT
-            if [ "$CUSTOM_OPT" = "y" ] || [ "$CUSTOM_OPT" = "Y" ]; then
-                printf "Enter cron schedule (e.g., '30 2 * * *'): "
-                read USER_SCHEDULE
-                if [ -n "$USER_SCHEDULE" ]; then
-                    FINAL_SCHEDULE="$USER_SCHEDULE"
-                else
-                    echo "Input empty, using default."
-                fi
-            fi
-
-            (crontab -l 2>/dev/null; echo "$FINAL_SCHEDULE $INSTALL_PATH") | crontab -
-            echo "Cron job added with schedule: $FINAL_SCHEDULE"
-            /etc/init.d/cron restart
-        fi
+    # Cron Setup
+    if crontab -l 2>/dev/null | grep -q "$INSTALL_PATH"; then
+        print_info "Cron job already exists."
     else
-        echo "Skipping Cron job setup."
-    fi
+        FINAL_SCHEDULE="$DEFAULT_CRON_SCHEDULE"
+        
+        # Optional: Custom schedule
+        echo -e "   Default schedule: ${C_BOLD}$DEFAULT_CRON_SCHEDULE${C_RESET} (4:00 AM)"
+        printf "   Use custom schedule? [y/N]: "
+        read CUSTOM_OPT
+        if [ "$CUSTOM_OPT" = "y" ] || [ "$CUSTOM_OPT" = "Y" ]; then
+            printf "   Enter cron schedule (e.g., '30 2 * * *'): "
+            read USER_SCHEDULE
+            [ -n "$USER_SCHEDULE" ] && FINAL_SCHEDULE="$USER_SCHEDULE"
+        fi
 
+        (crontab -l 2>/dev/null; echo "$FINAL_SCHEDULE $INSTALL_PATH") | crontab -
+        /etc/init.d/cron restart
+        print_success "Cron job added: $FINAL_SCHEDULE"
+    fi
 else
-    echo "Skipping auto-update script installation."
+    print_info "Skipping auto-update setup."
 fi
 
-echo ""
-echo "=== Installation Complete! ==="
-echo ""
 
-echo "[8/7] Configuring Network & Firewall..."
-printf "Do you want to configure the 'tailscale' interface and firewall zone automatically? [y/N]: "
-read CONFIG_FW
+# --- Step 7 (Network) ---
+print_header "[7/7] Network & Firewall Configuration"
 
-if [ "$CONFIG_FW" = "y" ] || [ "$CONFIG_FW" = "Y" ]; then
-    echo "Configuring network interface..."
+if ask_yes_no "Configure 'tailscale' interface and firewall zone automatically?"; then
+    print_info "Applying network settings..."
     
     # 1. Interface Config (Safe to overwrite)
     uci set network.tailscale=interface
@@ -215,64 +269,60 @@ if [ "$CONFIG_FW" = "y" ] || [ "$CONFIG_FW" = "Y" ]; then
         uci set firewall.@forwarding[-1].dest='tailscale'
     fi
 
-    # Commit and Reload
     uci commit network
     uci commit firewall
+
     echo "Reloading network and firewall..."
     /etc/init.d/network reload
     /etc/init.d/firewall reload
-    echo "Configuration applied."
+    print_success "Network configuration applied."
 else
-    echo "Skipping network configuration."
+    print_info "Skipping network configuration."
 fi
 
+# --- Performance Optimization (Conditional) ---
 if [ -n "$MAJOR" ] && [ "$MAJOR" -eq 24 ]; then
-    echo ""
-    echo "=== Performance Optimization (OpenWrt 24.x) ==="
-    echo "OpenWrt 24 supports UDP transport layer offloading (UDP-GRO/GSO),"
+    print_header "Option: Performance Optimization (OpenWrt 24.10)"
+    echo "OpenWrt 24.10 supports UDP transport layer offloading (UDP-GRO/GSO),"
     echo "which can significantly improve Tailscale throughput."
     echo ""
     echo "To enable this, 'ethtool' is required, along with specific hardware configuration."
     echo "Please refer to the following documents for setup:"
     echo "1. https://tailscale.com/kb/1320/performance-best-practices#linux-optimizations-for-subnet-routers-and-exit-nodes"
     echo "2. https://openwrt.org/docs/guide-user/services/vpn/tailscale/start#throughput_improvements_via_transport_layer_offloading_in_openwrt_2410"
-    echo ""
     
-    printf "Do you want to install 'ethtool' now? [y/N]: "
-    read INSTALL_ETHTOOL
-
-    if [ "$INSTALL_ETHTOOL" = "y" ] || [ "$INSTALL_ETHTOOL" = "Y" ]; then
-        echo "Installing ethtool..."
-        opkg update && opkg install ethtool
-        echo "ethtool installed. Please follow the documentation to configure offloading."
+    if ask_yes_no "Install 'ethtool' now?"; then
+        opkg update >/dev/null 2>&1 && opkg install ethtool
+        print_success "ethtool installed."
     else
-        echo "Skipping ethtool installation."
+        print_info "Skipping ethtool installation."
     fi
-    echo "============================================="
-    echo ""
 fi
 
-echo "[9/7] Tailscale Initial Setup..."
-printf "Do you want to run 'tailscale up' now to authenticate? [y/N]: "
-read RUN_UP
 
-if [ "$RUN_UP" = "y" ] || [ "$RUN_UP" = "Y" ]; then
-    echo "Running 'tailscale up'..."
+# --- Final Step ---
+print_header "Tailscale Initial Setup"
+
+if ask_yes_no "Run 'tailscale up' now to authenticate?"; then
+    echo ""
+    echo -e "${C_BOLD}>>> Starting Tailscale Authentication...${C_RESET}"
+    echo "    Please copy the URL below if prompted."
+    echo ""
     tailscale up
     
     echo ""
-    echo "Tailscale is now up!"
+    print_success "Tailscale is now up!"
     echo "If you need to enable specific features (flags) later,"
     echo "please use the 'tailscale set [flags]' command."
     echo ""
     echo "For more details, please refer to the official documentation:"
     echo "https://tailscale.com/kb/1080/cli#set"
 else
-    echo ""
-    echo "Skipping authentication."
-    echo "You can run 'tailscale up' manually later."
+    print_info "Skipping authentication. Run 'tailscale up' manually later."
 fi
 
 echo ""
-echo "=== Setup Complete! ==="
+echo -e "${C_BLUE}========================================================${C_RESET}"
+echo -e "${C_GREEN}${C_BOLD}   Installation & Setup Complete!   ${C_RESET}"
+echo -e "${C_BLUE}========================================================${C_RESET}"
 echo ""

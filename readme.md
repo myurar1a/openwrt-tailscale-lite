@@ -70,9 +70,8 @@ If you prefer to configure it manually:
    ```
 
 2. **Add Repository**:
-   Add the following to `/etc/opkg/customfeeds.conf` (Replace `<ARCH>` with your architecture):
-   ```text
-   src/gz custom_tailscale https://myurar1a.github.io/openwrt-tailscale-small/<ARCH>
+   ```sh
+   echo "src/gz custom_tailscale https://myurar1a.github.io/openwrt-tailscale-small/$(opkg print-architecture | awk 'END {print $2}')" >> /etc/opkg/customfeeds.conf
    ```
 
 3. **Install**:
