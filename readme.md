@@ -30,12 +30,7 @@ Run the following command on your OpenWrt router.
 This script handles dependencies, repository setup, installation, and auto-update configuration.
 
 ```sh
-opkg update
-opkg install curl ca-bundle kmod-tun
-sh -c "$(curl -sL https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/install.sh)"
-
-tailscale up
-tailscale status
+sh -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/install.sh)"
 ```
 
 ### What this installer does:
