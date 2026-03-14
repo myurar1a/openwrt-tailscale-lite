@@ -84,8 +84,8 @@ jobs:
              echo "Skipping check, forcing build of $LATEST_TAG"
              echo "should_run=true" >> $GITHUB_OUTPUT
              echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-          elif [ "$LATEST_TAG" != "$MY_LATEST" ] || [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo "New version detected."
+          elif [ "$LATEST_TAG" != "$MY_LATEST" ] || [ "${{ github.event_name }}" == "repository_dispatch" ] || [ "${{ github.event_name }}" == "push" ]; then
+            echo "New version, repository_dispatch, or push to develop detected."
             echo "should_run=true" >> $GITHUB_OUTPUT
             echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
           else
