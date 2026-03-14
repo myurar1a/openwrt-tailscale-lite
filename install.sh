@@ -71,6 +71,10 @@ echo -e "${C_RESET}"
 echo -e " * Press ${C_BOLD}ENTER${C_RESET} to accept default values (Yes)."
 echo -e " * Press ${C_BOLD}Ctrl+C${C_RESET} to abort at any time."
 
+# --- Package Manager Detection ---
+# apkコマンドの有無でパッケージマネージャーを判定
+PKG_MANAGER="opkg"
+
 # --- Step 1 ---
 print_header "[1/7] Checking OpenWrt Version"
 
@@ -87,20 +91,18 @@ if [ -f /etc/openwrt_release ]; then
         *)
             print_info "Detected OpenWrt Version: ${C_BOLD}$VERSION_STR${C_RESET}"
 
-            if [ "$MAJOR" -ge 25 ]; then
-                # Version 25.12+ (Future support for apk)
-                echo ""
-                print_error "OpenWrt 25.12+ (apk based) detected."
-                echo "   Support for this environment is pending validation."
-                echo "   Aborting installation to prevent system issues."
-                exit 0
-
+            if [ "$MAJOR" -ge 25 ] || [ "$PKG_MANAGER" = "apk" ]; then
+                # Version 25.12+ (apk based)
+                print_success "OpenWrt 25.12 detected."
+                PKG_MANAGER="apk"
             elif [ "$MAJOR" -eq 24 ]; then
                 # Version 24.10
-                print_success "Version 24.10 is supported."
+                print_success "OpenWrt 24.10 detected."
+                PKG_MANAGER="opkg"
             else
                 # Version 23.05 or older (22, 23)
-                print_warn "Old version detected. OpenWrt 24.10 is recommended for best performance."
+                print_warn "Old version OpenWrt detected. OpenWrt 24.10+ is recommended for best performance."
+                PKG_MANAGER="opkg"
             fi
             ;;
     esac
@@ -111,15 +113,24 @@ fi
 
 # --- Step 2 ---
 print_header "[2/7] Detecting Architecture"
-ARCH=$(opkg print-architecture | awk 'END {print $2}')
+
+# パッケージマネージャーに応じてアーキテクチャとチェック用ファイルを切り替え
+if [ "$PKG_MANAGER" = "apk" ]; then
+    ARCH=$(apk --print-arch)
+    CHECK_FILE="APKINDEX.tar.gz"
+else
+    ARCH=$(opkg print-architecture | awk 'END {print $2}')
+    CHECK_FILE="Packages.gz"
+fi
+
 REPO_URL="https://myurar1a.github.io/openwrt-tailscale-small/${ARCH}"
 
 print_info "Architecture: ${C_BOLD}${ARCH}${C_RESET}"
 print_info "Checking repository availability..."
 
-if ! wget -q --spider --no-check-certificate "${REPO_URL}/Packages.gz"; then
+if ! wget -q --spider --no-check-certificate "${REPO_URL}/${CHECK_FILE}"; then
     print_error "Repository not found for architecture '${ARCH}'."
-    echo "   URL: ${REPO_URL}"
+    echo "   URL: ${REPO_URL}/${CHECK_FILE}"
     exit 1
 fi
 print_success "Repository found."
@@ -129,12 +140,22 @@ print_success "Repository found."
 print_header "[3/7] Installing Public Key"
 TMP_KEY="/tmp/myurar1a-repo.pub"
 RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
-PUBKEY_NAME="myurar1a-repo.pub"
+USIGN_PUBKEY_NAME="usign_key.pub"
+APK_PUBKEY_NAME="apk_key.rsa.pub"
 
 if wget -q --no-check-certificate -O "$TMP_KEY" "$RAW_URL/cert/$PUBKEY_NAME"; then
-    opkg-key add "$TMP_KEY"
-    rm "$TMP_KEY"
-    print_success "Public key installed."
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        # apk用の公開鍵の配置
+        mkdir -p /etc/apk/keys
+        cp "$TMP_KEY" "/etc/apk/keys/$PUBKEY_NAME"
+        rm "$TMP_KEY"
+        print_success "Public key installed to /etc/apk/keys/"
+    else
+        # opkg用の公開鍵のインストール
+        opkg-key add "$TMP_KEY"
+        rm "$TMP_KEY"
+        print_success "Public key installed."
+    fi
 else
     print_error "Failed to download public key."
     exit 1
@@ -143,44 +164,92 @@ fi
 
 # --- Step 4 ---
 print_header "[4/7] Configuring Repository"
-FEED_CONF="/etc/opkg/customfeeds.conf"
-if ! grep -q "custom_tailscale" "$FEED_CONF"; then
-    echo "src/gz custom_tailscale ${REPO_URL}" >> "$FEED_CONF"
-    print_success "Repository added to customfeeds.conf"
+if [ "$PKG_MANAGER" = "apk" ]; then
+    # apk用のリポジトリ設定
+    FEED_CONF="/etc/apk/repositories.d/custom_tailscale.list"
+    mkdir -p /etc/apk/repositories.d
+    if [ ! -f "$FEED_CONF" ] || ! grep -q "$REPO_URL" "$FEED_CONF"; then
+        echo "$REPO_URL" >> "$FEED_CONF"
+        print_success "Repository added to $FEED_CONF"
+    else
+        print_info "Repository already configured."
+    fi
 else
-    print_info "Repository already configured."
+    # opkg用のリポジトリ設定
+    FEED_CONF="/etc/opkg/customfeeds.conf"
+    if ! grep -q "custom_tailscale" "$FEED_CONF"; then
+        echo "src/gz custom_tailscale ${REPO_URL}" >> "$FEED_CONF"
+        print_success "Repository added to customfeeds.conf"
+    else
+        print_info "Repository already configured."
+    fi
 fi
 
 
 # --- Step 5 ---
 print_header "[5/7] Installing Tailscale"
 print_info "Updating package lists..."
-if ! opkg update >/dev/null 2>&1; then
-    print_error "'opkg update' failed. Check internet connection or repo signature."
-    exit 1
-fi
 
-INSTALLED=$(opkg list-installed tailscale | awk '{print $3}')
-if [ -n "$INSTALLED" ]; then
-    print_warn "Tailscale is already installed ($INSTALLED)."
-    if ask_yes_no "Re-install/Update to ensure latest version?"; then
+if [ "$PKG_MANAGER" = "apk" ]; then
+    # apkインストール
+    if ! apk update >/dev/null 2>&1; then
+        print_error "'apk update' failed. Check internet connection or repo signature."
+        exit 1
+    fi
+
+    # インストール済みの確認
+    INSTALLED=$(apk info -e tailscale 2>/dev/null)
+    if [ -n "$INSTALLED" ]; then
+        print_warn "Tailscale is already installed ($INSTALLED)."
+        if ask_yes_no "Re-install/Update to ensure latest version?"; then
+            echo ""
+            echo ">> apk del tailscale"
+            apk del tailscale
+            echo ""
+            echo ">> apk add tailscale"
+            apk add tailscale
+            print_success "Tailscale re-installed."
+        else
+            print_error "Installation Canceled."
+            exit 1
+        fi
+    else
+        print_info "Installing Tailscale package..."
         echo ""
-        echo ">> opkg remove tailscale"
-        opkg remove tailscale
+        echo ">> apk add tailscale"
+        apk add tailscale
+        print_success "Tailscale installed."
+    fi
+else
+    # opkgインストール
+    if ! opkg update >/dev/null 2>&1; then
+        print_error "'opkg update' failed. Check internet connection or repo signature."
+        exit 1
+    fi
+
+    # インストール済みの確認
+    INSTALLED=$(opkg list-installed tailscale | awk '{print $3}')
+    if [ -n "$INSTALLED" ]; then
+        print_warn "Tailscale is already installed ($INSTALLED)."
+        if ask_yes_no "Re-install/Update to ensure latest version?"; then
+            echo ""
+            echo ">> opkg remove tailscale"
+            opkg remove tailscale
+            echo ""
+            echo ">> opkg install tailscale"
+            opkg install tailscale
+            print_success "Tailscale re-installed."
+        else
+            print_error "Installation Canceled."
+            exit 1
+        fi
+    else
+        print_info "Installing Tailscale package..."
         echo ""
         echo ">> opkg install tailscale"
         opkg install tailscale
-        print_success "Tailscale re-installed."
-    else
-        print_error "Installation Canceled."
-        exit 1
+        print_success "Tailscale installed."
     fi
-else
-    print_info "Installing Tailscale package..."
-    echo ""
-    echo ">> opkg install tailscale"
-    opkg install tailscale
-    print_success "Tailscale installed."
 fi
 
 
@@ -194,7 +263,12 @@ if ask_yes_no "Install auto-update script and schedule Cron job?"; then
     fi
 
     # Download script
-    UPDATER_URL="$RAW_URL/upd-tailscale.sh"
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        UPDATER_URL="$RAW_URL/upd-tailscale_apk.sh"
+    else
+        UPDATER_URL="$RAW_URL/upd-tailscale_opkg.sh"
+    fi
+
     if wget -q --no-check-certificate -O "$INSTALL_PATH" "$UPDATER_URL"; then
         chmod +x "$INSTALL_PATH"
         print_success "Script downloaded to $INSTALL_PATH"
@@ -292,7 +366,11 @@ if [ -n "$MAJOR" ] && [ "$MAJOR" -eq 24 ]; then
     echo "2. https://openwrt.org/docs/guide-user/services/vpn/tailscale/start#throughput_improvements_via_transport_layer_offloading_in_openwrt_2410"
     
     if ask_yes_no "Install 'ethtool' now?"; then
-        opkg update >/dev/null 2>&1 && opkg install ethtool
+        if [ "$PKG_MANAGER" = "apk" ]; then
+            apk update >/dev/null 2>&1 && apk add ethtool
+        else
+            opkg update >/dev/null 2>&1 && opkg install ethtool
+        fi
         print_success "ethtool installed."
     else
         print_info "Skipping ethtool installation."
