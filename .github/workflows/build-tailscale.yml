@@ -275,7 +275,7 @@ jobs:
               echo "arch = $ARCH"
             } > apk_build/control/.PKGINFO
 
-            # --- control ---
+            # --- control for .apk ---
             # インストールフックスクリプトをAPK仕様に変換 (インストール前後/アップグレード前後に対応)
             cp my-repo/openwrt/control/postinst apk_build/control/.post-install
             cp my-repo/openwrt/control/postinst apk_build/control/.post-upgrade
@@ -285,10 +285,13 @@ jobs:
             
             # build control.tar.gz
             cd apk_build/control
+            # dotglob を有効にして、* が隠しファイルにもマッチするようにする
+            shopt -s dotglob
             tar --numeric-owner --group=0 --owner=0 -czf ../control.tar.gz *
+            shopt -u dotglob
             cd ../..
             
-            # .apk packaging (unsign)
+            # --- .apk packaging (unsign) ---
             cd apk_build
             APK_NAME="tailscale_${VERSION_NUM}_${ARCH}.apk"
             cat control.tar.gz data.tar.gz > "$APK_NAME"
