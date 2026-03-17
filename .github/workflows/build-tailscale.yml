@@ -385,10 +385,12 @@ jobs:
             cp "$PKG" "$ARCH_NAME"/
           done
           
-          # --- IPK のインデックス生成と署名 (OpenWrt rootfs コンテナを使用) ---
+          # --- ipk のインデックス生成と署名 (OpenWrt rootfsコンテナを使用) ---
           for ARCH_DIR in */; do
             if [ -d "$ARCH_DIR" ] && ls "$ARCH_DIR"/*.ipk >/dev/null 2>&1; then
               cd "$ARCH_DIR"
+
+              # Generate index
               echo "Generating IPK index for $ARCH_DIR..."
               echo "" > Packages
               for IPK in *.ipk; do
@@ -400,6 +402,7 @@ jobs:
               done
               gzip -k -f Packages
 
+              # Sign ipk
               echo "Signing Packages (IPK)..."
               docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w "/work/$ARCH_DIR" openwrt/rootfs:x86-64-23.05.5 \
                 usign -S -m Packages -s ../key.sec -x Packages.sig
@@ -407,23 +410,25 @@ jobs:
             fi
           done
 
-          # --- APK の署名とインデックス生成 (Alpine コンテナを使用) ---
-          echo "Signing and indexing APKs..."
+          # --- apk のインデックス生成と署名 (alpineコンテナを使用) ---
           docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w /work alpine:latest sh -c "
             apk add --no-cache abuild
-            # 秘密鍵を abuild が認識できる場所にコピー
-            mkdir -p /etc/apk/keys
-            cp apk_key.rsa /etc/apk/keys/
             
+            # Copy pubkey to trusted keys dir
+            mkdir -p /etc/apk/keys
+            cp /work/cert/apk_key.rsa.pub /etc/apk/keys/
+
             for ARCH_DIR in */ ; do
-              if [ -d \"\$ARCH_DIR\" ] && ls \"\$ARCH_DIR\"/*.apk >/dev/null 2>&1; then
+              if [ -d \"\$ARCH_DIR\" ] && [ \"\$ARCH_DIR\" != \"cert/\" ] && ls \"\$ARCH_DIR\"/*.apk >/dev/null 2>&1; then
                 cd \"\$ARCH_DIR\"
+
+                # Sign apk
                 echo \"Signing APKs in \$ARCH_DIR...\"
                 for APK in *.apk; do
-                  # 未署名apkに署名を付加 (元のファイルを自動で上書きします)
                   abuild-sign -q -k ../apk_key.rsa \"\$APK\"
                 done
                 
+                # Generate index
                 echo \"Generating APK index for \$ARCH_DIR...\"
                 apk index -o APKINDEX.tar.gz *.apk
                 abuild-sign -q -k ../apk_key.rsa APKINDEX.tar.gz
