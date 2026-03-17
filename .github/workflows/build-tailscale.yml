@@ -147,12 +147,12 @@ jobs:
 
     steps:
       - name: Checkout this repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: my-repo
 
       - name: Checkout Tailscale
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: tailscale/tailscale
           ref: ${{ needs.init.outputs.version }}
@@ -160,7 +160,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: tailscale-src/go.mod
           cache-dependency-path: tailscale-src/go.sum
@@ -300,7 +300,7 @@ jobs:
           done
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tailscale_pkgs_${{ matrix.goarch }}_${{ matrix.goarm || '0' }}
           path: |
@@ -315,13 +315,13 @@ jobs:
       contents: write
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.init.outputs.version }}
           name: Small Tailscale ${{ needs.init.outputs.version }}
@@ -344,8 +344,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Checkout gh-pages
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: gh-pages
           path: repo-page
@@ -362,7 +365,7 @@ jobs:
           fi
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -404,14 +407,20 @@ jobs:
 
               # Sign ipk
               echo "Signing Packages (IPK)..."
-              docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w "/work/$ARCH_DIR" openwrt/rootfs:x86-64-23.05.5 \
+              docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w "/work/$ARCH_DIR" openwrt/rootfs:x86-64-24.10.5 \
                 usign -S -m Packages -s ../key.sec -x Packages.sig
               cd ..
             fi
           done
 
           # --- apk のインデックス生成と署名 (alpineコンテナを使用) ---
-          docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w /work alpine:latest sh -c "
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/repo-page":/work \
+            -v "$GITHUB_WORKSPACE/cert":/cert:ro \
+            -w /work \
+            alpine:latest sh -c "
+
+            # Install abuild
             apk add --no-cache abuild
             
             # Copy pubkey to trusted keys dir
