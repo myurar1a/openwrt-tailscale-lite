@@ -1,6 +1,6 @@
 
 Package: tailscale
-Version: 1.94.2
+Version: 1.96.2
 Depends: libc, ca-bundle, kmod-tun
 Source: https://github.com/tailscale/tailscale
 SourceName: tailscale
@@ -15,8 +15,8 @@ Architecture: mips_mips32
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 4269306
-Filename: tailscale_1.94.2_mips_mips32.ipk
-Size: 4269763
-SHA256sum: 73b850df59e6a5a0ae11ba1b3df9b6cba7738d4d42f8e980b5a5b31f4097a2ee
+Installed-Size: 4330158
+Filename: tailscale_1.96.2_mips_mips32.ipk
+Size: 4330676
+SHA256sum: 950e12f8495c780efcfa73c0c84864793c20bbcc25f09eee9af3ea4d06230e89
 
