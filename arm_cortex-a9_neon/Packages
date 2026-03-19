@@ -1,6 +1,6 @@
 
 Package: tailscale
-Version: 1.96.2
+Version: 1.96.3
 Depends: libc, ca-bundle, kmod-tun
 Source: https://github.com/tailscale/tailscale
 SourceName: tailscale
@@ -15,8 +15,8 @@ Architecture: arm_cortex-a9_neon
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 4423882
-Filename: tailscale_1.96.2_arm_cortex-a9_neon.ipk
-Size: 4425004
-SHA256sum: f3f0d35dd82ee222ec4215eb345f8f64f9b726182a34dbc47625c0b2681ae857
+Installed-Size: 4423402
+Filename: tailscale_1.96.3_arm_cortex-a9_neon.ipk
+Size: 4424587
+SHA256sum: 5d9959e21f5f9d555af1c8d9942e646ceddd8905de8e1f9218df1c958c2a12d4
 

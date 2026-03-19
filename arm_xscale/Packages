@@ -1,6 +1,6 @@
 
 Package: tailscale
-Version: 1.96.2
+Version: 1.96.3
 Depends: libc, ca-bundle, kmod-tun
 Source: https://github.com/tailscale/tailscale
 SourceName: tailscale
@@ -15,8 +15,8 @@ Architecture: arm_xscale
 Description: Small Tailscale. 
  It creates a secure network between your servers, computers,
  and cloud instances. Even when separated by firewalls or subnets.
-Installed-Size: 4437010
-Filename: tailscale_1.96.2_arm_xscale.ipk
-Size: 4438008
-SHA256sum: a93b49a202804eef7b4f5e7dabc71eb3c3d160a23ad7b5addab739c20ce46b5f
+Installed-Size: 4437202
+Filename: tailscale_1.96.3_arm_xscale.ipk
+Size: 4438254
+SHA256sum: a304fbbcbadd0fb8d9ca82c4629c1eba3bbcb5e3b16d8338b5e689a5a8810625
 
