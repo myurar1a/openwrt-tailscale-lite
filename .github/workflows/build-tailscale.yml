@@ -332,7 +332,7 @@ jobs:
               | gzip -n -9 > sign.tar.gz
             
             # --- .apk packaging (signed) ---
-            APK_NAME="tailscale_${VERSION_NUM}_${ARCH}.apk"
+            APK_NAME="tailscale_${VERSION_NUM}-r1_${ARCH}.apk"
             cat sign.tar.gz control.tar.gz data.tar.gz > "$APK_NAME"
 
             # .apk を artifacts ディレクトリへ退避し、一時ファイルを削除
@@ -420,6 +420,10 @@ jobs:
           echo "$USIGN_KEY" > key.sec
           echo "$APK_KEY" > apk_key.rsa
           
+          for ARCH_DIR in repo-page/*/; do
+            [ -d "$ARCH_DIR" ] && rm -f "$ARCH_DIR"*.ipk "$ARCH_DIR"*.apk
+          done
+
           # ipkとapkを配置
           find ../artifacts -type f \( -name "*.ipk" -o -name "*.apk" \) | while read PKG; do
             echo "Processing $PKG..."
@@ -451,6 +455,7 @@ jobs:
               echo "Signing Packages (IPK)..."
               docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w "/work/$ARCH_DIR" openwrt/rootfs:x86-64-24.10.5 \
                 usign -S -m Packages -s ../key.sec -x Packages.sig
+              rm Packages
               cd ..
             fi
           done
