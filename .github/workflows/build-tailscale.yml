@@ -419,7 +419,7 @@ jobs:
           cd repo-page
 
           # clean
-          for ARCH_DIR in repo-page/*/; do
+          for ARCH_DIR in */; do
             [ -d "$ARCH_DIR" ] && rm -f "$ARCH_DIR"*
           done
 
@@ -432,7 +432,6 @@ jobs:
             # ファイル名からアーキテクチャ名を抽出 (例: tailscale_1.96.3-r1_x86_64.ipk -> x86_64)
             ARCH_NAME=$(basename "$PKG" | sed -E 's/^tailscale_[^_]+_([^\.]+)\.ipk$/\1/')
             mkdir -p "$ARCH_NAME"
-            rm -f "$ARCH_NAME"/$(basename "$PKG")
             cp "$PKG" "$ARCH_NAME"/
           done
 
@@ -442,7 +441,7 @@ jobs:
             # ファイル名からアーキテクチャ名を抽出 (例: tailscale-1.96.3-r1_x86_64.apk > x86_64)
             ARCH_NAME=$(basename "$PKG" | sed -E 's/^tailscale-[^_]+_([^\.]+)\.apk$/\1/')
             # 配置時ファイル名
-            NEW_NAME=$(basename "$PKG" | sed 's/_${ARCH_NAME}//')
+            NEW_NAME=$(basename "$PKG" | sed "s/_${ARCH_NAME}//")
             cp "$PKG" "$ARCH_NAME"/"$NEW_NAME"
           done
           
@@ -517,7 +516,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add .
 
           # 変更がない場合のエラー回避
           git commit -m "Update repo ${{ needs.init.outputs.version }}" || echo "No changes to commit"
