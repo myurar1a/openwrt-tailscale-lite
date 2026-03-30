@@ -5,7 +5,7 @@ Automated build of a stripped-down, UPX-compressed [Tailscale](https://tailscale
 
 - **Always Up-to-Date**: Automatically detects new releases from the [official Tailscale repository](https://github.com/tailscale/tailscale) and triggers a build immediately.
 - **Optimized for OpenWrt**:
-  - Built as an `.ipk` package ready for installation via Opkg.
+  - Built as both `.ipk` packages for installation via Opkg and `.apk` packages for installation via Apk.
   - **Small Size**: Package size is reduced to around 5MB.
   - **Multicall Binary**: Combines `tailscale` and `tailscaled` CLI into a single binary to save space.
 - **Official Build Standards**:
@@ -35,10 +35,13 @@ sh -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/myur
 
 ### What this installer does:
 1. Detects your router's OpenWrt version and architecture.
-2. Adds this repository to Opkg feeds.
-3. Installs the `tailscale` package.
-4. Installs an auto-update script to `~/scripts/upd-tailscale.sh`.
-5. Sets up a Cron job to check for updates.
+2. Checks the installation.
+3. Adds this repository to Opkg feeds.
+4. Installs the `tailscale` package.
+5. Installs an auto-update script to `~/scripts/upd-tailscale.sh`.
+6. Sets up a Cron job to check for updates.
+7. Sets up network and firewall configuration.
+8. Runs 'tailscale up'.
 
 ---
 
@@ -57,11 +60,29 @@ The installer sets up a cron job that runs `~/scripts/upd-tailscale.sh` at 4 AM.
 
 If you prefer to configure it manually:
 
+### For OpenWrt 25.12+ (Apk)
 1. **Add Signature**:
    ```sh
-   wget -q --no-check-certificate -O "/tmp/myurar1a-repo.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/myurar1a-repo.pub"
-   opkg-key add "/tmp/myurar1a-repo.pub"
-   rm "/tmp/myurar1a-repo.pub"
+   wget -q --no-check-certificate -O "/etc/apk/keys/myurar1a-repo.rsa.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/apk_key.rsa.pub"
+   ```
+
+2. **Add Repository**:
+   ```sh
+   echo "src/gz custom_tailscale https://myurar1a.github.io/openwrt-tailscale-small/$(grep "DISTRIB_ARCH=" /etc/openwrt_release | cut -d'=' -f2 | tr -d '"'\')" >> /etc/opkg/customfeeds.conf
+   ```
+
+3. **Install**:
+   ```sh
+   apk update
+   apk add tailscale
+   ```
+
+### For OpenWrt 24.10- (Opkg)
+1. **Add Signature**:
+   ```sh
+   wget -q --no-check-certificate -O "/tmp/usign_key.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/usign_key.pub"
+   opkg-key add "/tmp/usign_key.pub"
+   rm "/tmp/usign_key.pub"
    ```
 
 2. **Add Repository**:

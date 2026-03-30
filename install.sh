@@ -73,12 +73,13 @@ echo -e " * Press ${C_BOLD}Ctrl+C${C_RESET} to abort at any time."
 
 
 # --- Step 1 ---
-print_header "[1/9] Checking OpenWrt Version"
+print_header "[1/8] Checking OpenWrt Version"
 
 if [ -f /etc/openwrt_release ]; then
     . /etc/openwrt_release
     # Clean quotes from version string
     VERSION_STR="${DISTRIB_RELEASE//\"/}"
+    ARCH="${DISTRIB_ARCH//\"/}"
 
     if [ "$VERSION_STR" = "SNAPSHOT" ]; then
         print_success "Detected OpenWrt Version: ${C_BOLD}$VERSION_STR${C_RESET}"
@@ -112,21 +113,7 @@ fi
 
 
 # --- Step 2 ---
-print_header "[2/9] Detecting Architecture"
-
-# パッケージマネージャーに応じてアーキテクチャとチェック用ファイルを切り替え
-if [ "$PKG_MANAGER" = "apk" ]; then
-    ARCH=$(apk --print-arch)
-    CHECK_FILE="APKINDEX.tar.gz"
-else
-    ARCH=$(opkg print-architecture | awk 'END {print $2}')
-    CHECK_FILE="Packages.gz"
-fi
-print_success "Detected Architecture: ${C_BOLD}${ARCH}${C_RESET}"
-
-
-# --- Step 3 ---
-print_header "[3/9] Check installed list"
+print_header "[2/8] Check installed list"
 
 if [ "$PKG_MANAGER" = "apk" ]; then
     if apk info -e tailscale >/dev/null 2>&1; then
@@ -173,10 +160,16 @@ fi
 
 
 if [ -z "$SKIP_INSTALL" ]; then
-# --- Step 4 ---
-print_header "[4/9] Check Repository"
+# --- Step 3 ---
+print_header "[3/8] Check Repository"
 print_info "Checking repository availability..."
 REPO_URL="https://myurar1a.github.io/openwrt-tailscale-small"
+
+if [ "$PKG_MANAGER" = "apk" ]; then
+    CHECK_FILE="APKINDEX.tar.gz"
+else
+    CHECK_FILE="Packages.gz"
+fi
 
 if ! wget -q --spider --no-check-certificate "${REPO_URL}/${ARCH}/${CHECK_FILE}"; then
     print_error "Repository not found for architecture '${ARCH}'."
@@ -186,16 +179,15 @@ fi
 print_success "Repository found."
 
 
-# --- Step 5 ---
-print_header "[5/9] Installing Public Key"
+# --- Step 4 ---
+print_header "[4/8] Installing Public Key"
 RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
 USIGN_PUBKEY_NAME="usign_key.pub"
-APK_PUBKEY_NAME="apk_key.rsa.pub"
 
 if [ "$PKG_MANAGER" = "apk" ]; then
     # apk用の公開鍵の配置
     mkdir -p /etc/apk/keys
-    if wget -q --no-check-certificate -O "/etc/apk/keys/$APK_PUBKEY_NAME" "$RAW_URL/cert/$APK_PUBKEY_NAME"; then
+    if wget -q --no-check-certificate -O "/etc/apk/keys/myurar1a-repo.rsa.pub" "$RAW_URL/cert/apk_key.rsa.pub"; then
         print_success "Public key installed to /etc/apk/keys/"
     else
         print_error "Failed to download public key."
@@ -214,10 +206,9 @@ else
 fi
 
 
-# --- Step 6 ---
-print_header "[6/9] Configuring Repository"
+# --- Step 5 ---
+print_header "[5/8] Configuring Repository"
 if [ "$PKG_MANAGER" = "apk" ]; then
-    # apk用のリポジトリ設定
     FEED_CONF="/etc/apk/repositories.d/custom_tailscale.list"
     mkdir -p /etc/apk/repositories.d
     if [ ! -f "$FEED_CONF" ] || ! grep -q "$REPO_URL" "$FEED_CONF"; then
@@ -227,7 +218,6 @@ if [ "$PKG_MANAGER" = "apk" ]; then
         print_info "Repository already configured."
     fi
 else
-    # opkg用のリポジトリ設定
     FEED_CONF="/etc/opkg/customfeeds.conf"
     if ! grep -q "custom_tailscale" "$FEED_CONF"; then
         echo "src/gz custom_tailscale ${REPO_URL}/${ARCH}" >> "$FEED_CONF"
@@ -238,12 +228,11 @@ else
 fi
 
 
-# --- Step 7 ---
-print_header "[7/9] Installing Tailscale"
+# --- Step 6 ---
+print_header "[6/8] Installing Tailscale"
 print_info "Updating package lists..."
 
 if [ "$PKG_MANAGER" = "apk" ]; then
-    # apkインストール
     if ! apk update >/dev/null 2>&1; then
         print_error "'apk update' failed. Check internet connection."
         exit 1
@@ -254,7 +243,6 @@ if [ "$PKG_MANAGER" = "apk" ]; then
     apk add tailscale
     print_success "Tailscale installed."
 else
-    # opkgインストール
     if ! opkg update >/dev/null 2>&1; then
         print_error "'opkg update' failed. Check internet connection."
         exit 1
@@ -268,8 +256,8 @@ fi
 
 
 fi # end of SKIP_INSTALL block
-# --- Step 8 ---
-print_header "[8/9] Auto-Update Script Setup"
+# --- Step 7 ---
+print_header "[7/8] Auto-Update Script Setup"
 
 if ask_yes_no "Install auto-update script and schedule Cron job?"; then
     # Create directory if it doesn't exist
@@ -301,6 +289,8 @@ if ask_yes_no "Install auto-update script and schedule Cron job?"; then
         # Optional: Custom schedule
         echo -e "   Default schedule: ${C_BOLD}$DEFAULT_CRON_SCHEDULE${C_RESET} (4:00 AM)"
         if ask_yes_no "Use default schedule? (No: Custom)"; then
+            print_info "Using default schedule."
+        else
             printf "   Enter cron schedule (e.g., '30 2 * * *'): "
             read USER_SCHEDULE
             [ -n "$USER_SCHEDULE" ] && FINAL_SCHEDULE="$USER_SCHEDULE"
@@ -315,8 +305,8 @@ else
 fi
 
 
-# --- Step 9 (Network) ---
-print_header "[9/9] Network & Firewall Configuration"
+# --- Step 8 (Network) ---
+print_header "[8/8] Network & Firewall Configuration"
 
 if ask_yes_no "Configure 'tailscale' interface and firewall zone automatically?"; then
     print_info "Applying network settings..."

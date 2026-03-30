@@ -315,9 +315,9 @@ jobs:
             cd ../..
             
             # 5. sign control.tar.gz
-            echo "$APK_KEY" > apk_key.rsa
-            SIGN_FILE=".SIGN.RSA.apk_key.rsa.pub"
-            openssl dgst -sha1 -sign apk_key.rsa -out apk_build/${SIGN_FILE} apk_build/control.tar.gz
+            echo "$APK_KEY" > myurar1a-repo.rsa
+            SIGN_FILE=".SIGN.RSA.myurar1a-repo.rsa.pub"
+            openssl dgst -sha1 -sign myurar1a-repo.rsa -out apk_build/${SIGN_FILE} apk_build/control.tar.gz
 
             # 6. build sign.tar.gz
             # abuild-sign の実装どおり apk_tar | abuild-tar --cut | gzip を再現
@@ -336,7 +336,7 @@ jobs:
             cat sign.tar.gz control.tar.gz data.tar.gz > "$APK_NAME"
 
             # .apk を artifacts ディレクトリへ退避し、一時ファイルを削除
-            rm -f ../apk_key.rsa ${SIGN_FILE} sign.tar.gz
+            rm -f ../myurar1a-repo.rsa ${SIGN_FILE} sign.tar.gz
             mv "$APK_NAME" ../artifacts/
             cd ..
           done
@@ -424,7 +424,7 @@ jobs:
           done
 
           echo "$USIGN_KEY" > usign_key.sec
-          echo "$APK_KEY" > apk_key.rsa
+          echo "$APK_KEY" > myurar1a-repo.rsa
 
           # ipk 配置
           find ../artifacts -type f \( -name "*.ipk" \) | while read PKG; do
@@ -483,8 +483,8 @@ jobs:
             
             # Copy pubkey
             mkdir -p /etc/apk/keys
-            cp /cert/apk_key.rsa.pub /etc/apk/keys/
-            cp /cert/apk_key.rsa.pub /work
+            cp /cert/apk_key.rsa.pub /etc/apk/keys/myurar1a-repo.rsa.pub
+            cp /cert/apk_key.rsa.pub /work/myurar1a-repo.rsa.pub
 
             for ARCH_DIR in */ ; do
               if [ -d \"\$ARCH_DIR\" ] && [ \"\$ARCH_DIR\" != \"cert/\" ] && ls \"\$ARCH_DIR\"/*.apk >/dev/null 2>&1; then
@@ -493,7 +493,7 @@ jobs:
                 # Generate index
                 echo \"Generating APK index for \$ARCH_DIR...\"
                 apk index -o APKINDEX.tar.gz *.apk
-                abuild-sign -q -k ../apk_key.rsa APKINDEX.tar.gz
+                abuild-sign -q -k ../myurar1a-repo.rsa APKINDEX.tar.gz
                 cd ..
               fi
             done
@@ -509,7 +509,7 @@ jobs:
             fi
           done
           
-          rm -f usign_key.sec apk_key.rsa apk_key.rsa.pub
+          rm -f usign_key.sec myurar1a-repo.rsa myurar1a-repo.rsa.pub
 
       - name: Deploy to GitHub Pages
         working-directory: repo-page
