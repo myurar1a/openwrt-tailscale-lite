@@ -68,7 +68,7 @@ If you prefer to configure it manually:
 
 2. **Add Repository**:
    ```sh
-   echo "src/gz custom_tailscale https://myurar1a.github.io/openwrt-tailscale-small/$(grep "DISTRIB_ARCH=" /etc/openwrt_release | cut -d'=' -f2 | tr -d '"'\')" >> /etc/opkg/customfeeds.conf
+   echo "https://myurar1a.github.io/openwrt-tailscale-small" >> "/etc/apk/repositories.d/custom_tailscale.list"
    ```
 
 3. **Install**:
