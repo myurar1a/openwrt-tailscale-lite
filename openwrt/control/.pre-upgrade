@@ -1,7 +1,7 @@
 #!/bin/sh
-export PKG_UPGRADE=1
-[ -s ${IPKG_INSTROOT}/lib/functions.sh ] || exit 0
-. ${IPKG_INSTROOT}/lib/functions.sh
-export root="${IPKG_INSTROOT}"
-export pkgname="tailscale"
-default_prerm
+case "$1" in
+    upgrade)
+        /etc/init.d/tailscale stop || true
+        ;;
+esac
+exit 0
