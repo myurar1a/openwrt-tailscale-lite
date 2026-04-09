@@ -1,0 +1,8 @@
+#!/bin/sh
+case "$1" in
+    remove|upgrade)
+        /etc/init.d/tailscale stop || true
+        /etc/init.d/tailscale disable || true
+        ;;
+esac
+exit 0

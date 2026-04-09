@@ -1,0 +1,8 @@
+#!/bin/sh
+case "$1" in
+    install|upgrade)
+        /etc/init.d/tailscale enable
+        /etc/init.d/tailscale start
+        ;;
+esac
+exit 0

@@ -84,8 +84,8 @@ jobs:
              echo "Skipping check, forcing build of $LATEST_TAG"
              echo "should_run=true" >> $GITHUB_OUTPUT
              echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-          elif [ "$LATEST_TAG" != "$MY_LATEST" ] || [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo "New version detected."
+          elif [ "$LATEST_TAG" != "$MY_LATEST" ] || [ "${{ github.event_name }}" == "repository_dispatch" ] || [ "${{ github.event_name }}" == "push" ]; then
+            echo "New version, repository_dispatch, or push to develop detected."
             echo "should_run=true" >> $GITHUB_OUTPUT
             echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
           else
@@ -147,12 +147,12 @@ jobs:
 
     steps:
       - name: Checkout this repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: my-repo
 
       - name: Checkout Tailscale
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: tailscale/tailscale
           ref: ${{ needs.init.outputs.version }}
@@ -160,7 +160,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: tailscale-src/go.mod
           cache-dependency-path: tailscale-src/go.sum
@@ -189,7 +189,9 @@ jobs:
         run: |
           upx --best --lzma tailscale.combined || echo "Warning: UPX compression failed for tailscale.combined (Arch: ${{ matrix.goarch }}). Using uncompressed binary."
 
-      - name: Package into IPK
+      - name: Package into IPK and APK
+        env:
+            APK_KEY: ${{ secrets.APK_PRIVATE_KEY }}
         run: |
           VERSION=${{ needs.init.outputs.version }}
           VERSION_NUM=${VERSION#v}
@@ -202,12 +204,13 @@ jobs:
             echo "Packaging for $ARCH..."
             
             # ビルド用の一時ディレクトリをクリーンアップ
-            rm -rf ipk_build
+            rm -rf ipk_build apk_build
             mkdir -p ipk_build/data/usr/sbin
             mkdir -p ipk_build/data/etc/config
             mkdir -p ipk_build/data/etc/init.d
             mkdir -p ipk_build/data/lib/upgrade/keep.d
             mkdir -p ipk_build/control
+            mkdir -p apk_build/control
             
             # --- data ---
             cp tailscale.combined ipk_build/data/usr/sbin/
@@ -221,12 +224,14 @@ jobs:
             cp my-repo/openwrt/data/tailscale.keep ipk_build/data/lib/upgrade/keep.d/tailscale
             chmod +x ipk_build/data/etc/init.d/tailscale
             
-            # build data.tar.gz
+            # --- .ipk ---
+            echo "Building IPK for $ARCH..."
+            # 1. build data.tar.gz
             cd ipk_build/data
             tar --numeric-owner --group=0 --owner=0 -czf ../data.tar.gz *
             cd ../..
             
-            # --- control ---
+            # 2. copy install scripts
             cp my-repo/openwrt/control/conffiles ipk_build/control/conffiles
             cp my-repo/openwrt/control/control ipk_build/control/control
             cp my-repo/openwrt/control/postinst ipk_build/control/postinst
@@ -236,30 +241,114 @@ jobs:
             sed -i "s/VERSION_PLACEHOLDER/$VERSION_NUM/g" ipk_build/control/control
             sed -i "s/ARCH_PLACEHOLDER/$ARCH/g" ipk_build/control/control
             
-            # dataのサイズを計算して Installed-Size に設定
+            # 3. Set data size to Installed-Size
             SIZE=$(du -sb ipk_build/data | awk '{ print $1 }')
             echo "Installed-Size: $SIZE" >> ipk_build/control/control
             
-            # build control.tar.gz
+            # 4. build control.tar.gz
             cd ipk_build/control
             tar --numeric-owner --group=0 --owner=0 -czf ../control.tar.gz *
             cd ../..
             
-            # --- .ipk ---
+            # --- .ipk packaging (unsign) ---
             echo "2.0" > ipk_build/debian-binary
             cd ipk_build
-            IPK_NAME="tailscale_${VERSION_NUM}_${ARCH}.ipk"
-            tar --numeric-owner --group=0 --owner=0 -czf "$IPK_NAME" debian-binary data.tar.gz control.tar.gz
+            IPK_NAME="tailscale_${VERSION_NUM}-r1_${ARCH}.ipk"
+            tar --numeric-owner --group=0 --owner=0 -czf "$IPK_NAME" debian-binary control.tar.gz data.tar.gz
             
-            # 生成物を退避
+            # .ipk を artifacts ディレクトリへ退避
             mv "$IPK_NAME" ../artifacts/
             cd ..
+
+            # --- .apk ---
+            echo "Building APK for $ARCH..."
+            
+            # 1. build data.tar.gz
+            # --format=posix + --pax-option で pax ヘッダを生成（abuild-tar --hash の前提条件）
+            # abuild-tar は Alpine 専用バイナリのため stdin/stdout パイプ経由で docker 内で実行
+            cd ipk_build/data
+            find . -mindepth 1 -print0 | LC_ALL=C sort -z \
+              | tar --format=posix \
+                    --pax-option=exthdr.name=%d/PaxHeaders/%f,atime:=0,ctime:=0 \
+                    --numeric-owner --owner=0 --group=0 \
+                    --no-recursion --null -f - -c -T - \
+                    --transform='s|^\./||' \
+              | docker run --rm -i alpine:latest sh -c \
+                  'apk add --no-cache abuild >/dev/null 2>&1 && abuild-tar --hash' \
+              | gzip -n -9 > ../../apk_build/data.tar.gz
+            cd ../..
+
+            # 2. make apk metadata (.PKGINFO)
+            # フィールド形式は "key = value"（スペース必須）
+            # datahash は data.tar.gz 生成後に計算して末尾に追記
+            {
+              echo "pkgname = tailscale"
+              echo "pkgver = ${VERSION_NUM}-r1"
+              echo "pkgdesc = Auto-generated small build for OpenWrt."
+              echo "url = https://github.com/${{ github.repository }}"
+              echo "builddate = $(date +%s)"
+              echo "packager = GitHub Actions <github-actions[bot]@users.noreply.github.com>"
+              echo "license = BSD-3-Clause"
+              echo "size = $(du -sk ipk_build/data | awk '{ print $1 * 1024 }')"
+              echo "arch = $ARCH"
+              echo "datahash = $(sha256sum apk_build/data.tar.gz | awk '{print $1}')"
+            } > apk_build/control/.PKGINFO
+
+            # 3. copy install scripts
+            cp my-repo/openwrt/control/.post-install apk_build/control/.post-install
+            cp my-repo/openwrt/control/.post-upgrade apk_build/control/.post-upgrade
+            cp my-repo/openwrt/control/.pre-deinstall apk_build/control/.pre-deinstall
+            cp my-repo/openwrt/control/.pre-upgrade apk_build/control/.pre-upgrade
+            chmod 755 apk_build/control/.post-* apk_build/control/.pre-*
+            
+            # 4. build control.tar.gz
+            # abuild-tar --cut: EOF レコードを除去（署名 prepend のため）
+            cd apk_build/control
+            SCRIPTS=$(ls -1 .post-* .pre-* 2>/dev/null || true)
+            printf "%s\0" .PKGINFO $SCRIPTS \
+              | tar --format=posix \
+                    --pax-option=exthdr.name=%d/PaxHeaders/%f,atime:=0,ctime:=0 \
+                    --numeric-owner --owner=0 --group=0 \
+                    --no-recursion --null -f - -c -T - \
+              | docker run --rm -i alpine:latest sh -c \
+                  'apk add --no-cache abuild >/dev/null 2>&1 && abuild-tar --cut' \
+              | gzip -n -9 > ../control.tar.gz
+            cd ../..
+            
+            # 5. sign control.tar.gz
+            echo "$APK_KEY" > myurar1a-repo.rsa
+            SIGN_FILE=".SIGN.RSA.myurar1a-repo.rsa.pub"
+            openssl dgst -sha1 -sign myurar1a-repo.rsa -out apk_build/${SIGN_FILE} apk_build/control.tar.gz
+
+            # 6. build sign.tar.gz
+            # abuild-sign の実装どおり apk_tar | abuild-tar --cut | gzip を再現
+            cd apk_build
+            printf "%s\0" ${SIGN_FILE} \
+              | tar --format=posix \
+                    --pax-option=exthdr.name=%d/PaxHeaders/%f,atime:=0,ctime:=0 \
+                    --numeric-owner --owner=0 --group=0 \
+                    --no-recursion --null -f - -c -T - \
+              | docker run --rm -i alpine:latest sh -c \
+                  'apk add --no-cache abuild >/dev/null 2>&1 && abuild-tar --cut' \
+              | gzip -n -9 > sign.tar.gz
+            
+            # --- .apk packaging (signed) ---
+            APK_NAME="tailscale-${VERSION_NUM}-r1_${ARCH}.apk"
+            cat sign.tar.gz control.tar.gz data.tar.gz > "$APK_NAME"
+
+            # .apk を artifacts ディレクトリへ退避し、一時ファイルを削除
+            rm -f ../myurar1a-repo.rsa ${SIGN_FILE} sign.tar.gz
+            mv "$APK_NAME" ../artifacts/
+            cd ..
           done
+
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tailscale_pkgs_${{ matrix.goarch }}_${{ matrix.goarm || '0' }}
-          path: "artifacts/*.ipk"
+          path: |
+            artifacts/*.ipk
+            artifacts/*.apk
 
   release:
     needs: [init, build]
@@ -269,13 +358,13 @@ jobs:
       contents: write
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.init.outputs.version }}
           name: Small Tailscale ${{ needs.init.outputs.version }}
@@ -285,8 +374,10 @@ jobs:
             
             **Build Tags:** `${{ needs.init.outputs.build_tags }}`
             **Build Flags:** `--extra-small --box`
-            **Compression:** UPX --best --lzma
-          files: artifacts/*.ipk
+            **Compression:** `upx --best --lzma`
+          files: |
+            artifacts/*.ipk
+            artifacts/*.apk
           prerelease: ${{ github.ref == 'refs/heads/develop' }}
 
   deploy-repo:
@@ -296,8 +387,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Checkout gh-pages
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: gh-pages
           path: repo-page
@@ -314,31 +408,51 @@ jobs:
           fi
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
-      - name: Generate Index
+      - name: Generate Index and Sign
         env:
           USIGN_KEY: ${{ secrets.USIGN_PRIVATE_KEY }}
+          APK_KEY: ${{ secrets.APK_PRIVATE_KEY }}
         run: |
           cd repo-page
-          echo "$USIGN_KEY" > key.sec
-          
-          # ipkを配置
-          find ../artifacts -type f -name "*.ipk" | while read IPK; do
-            echo "Processing $IPK..."
-            ARCH_NAME=$(basename "$IPK" | sed -E 's/^tailscale_[^_]+_(.+)\.ipk$/\1/')
+
+          # clean
+          for ARCH_DIR in */; do
+            [ -d "$ARCH_DIR" ] && rm -f "$ARCH_DIR"*
+          done
+
+          echo "$USIGN_KEY" > usign_key.sec
+          echo "$APK_KEY" > myurar1a-repo.rsa
+
+          # ipk 配置
+          find ../artifacts -type f \( -name "*.ipk" \) | while read PKG; do
+            echo "Processing $PKG..."
+            # ファイル名からアーキテクチャ名を抽出 (例: tailscale_1.96.3-r1_x86_64.ipk -> x86_64)
+            ARCH_NAME=$(basename "$PKG" | sed -E 's/^tailscale_[^_]+_([^\.]+)\.ipk$/\1/')
             mkdir -p "$ARCH_NAME"
-            rm -f "$ARCH_NAME"/*.ipk
-            cp "$IPK" "$ARCH_NAME"/
+            cp "$PKG" "$ARCH_NAME"/
+          done
+
+          # apk 配置
+          find ../artifacts -type f \( -name "*.apk" \) | while read PKG; do
+            echo "Processing $PKG..."
+            # ファイル名からアーキテクチャ名を抽出 (例: tailscale-1.96.3-r1_x86_64.apk > x86_64)
+            ARCH_NAME=$(basename "$PKG" | sed -E 's/^tailscale-[^_]+_([^\.]+)\.apk$/\1/')
+            # 配置時ファイル名
+            NEW_NAME=$(basename "$PKG" | sed "s/_${ARCH_NAME}//")
+            cp "$PKG" "$ARCH_NAME"/"$NEW_NAME"
           done
           
-          # インデックス生成と署名
+          # --- ipk のインデックス生成と署名 (OpenWrt rootfsコンテナを使用) ---
           for ARCH_DIR in */; do
-            if [ -d "$ARCH_DIR" ]; then
+            if [ -d "$ARCH_DIR" ] && ls "$ARCH_DIR"/*.ipk >/dev/null 2>&1; then
               cd "$ARCH_DIR"
-              echo "Generating index for $ARCH_DIR..."
+
+              # Generate index
+              echo "Generating IPK index for $ARCH_DIR..."
               echo "" > Packages
               for IPK in *.ipk; do
                 tar -xzOf "$IPK" control.tar.gz | tar xzO control >> Packages
@@ -349,17 +463,54 @@ jobs:
               done
               gzip -k -f Packages
 
-              echo "Signing Packages..."
-              docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w "/work/$ARCH_DIR" openwrt/rootfs:x86-64-23.05.5 \
-                usign -S -m Packages -s ../key.sec -x Packages.sig
+              # Sign ipk
+              echo "Signing Packages (IPK)..."
+              docker run --rm -v "$GITHUB_WORKSPACE/repo-page":/work -w "/work/$ARCH_DIR" openwrt/rootfs:x86-64-24.10.5 \
+                usign -S -m Packages -s ../usign_key.sec -x Packages.sig
+              rm Packages
               cd ..
-              else
-                # 不要な空ディレクトリがあれば削除
-                echo "Skipping $ARCH_DIR (no ipk files)"
-                cd .. && rm -rf "$ARCH_DIR" && continue
             fi
           done
-          rm key.sec
+
+          # --- apk のインデックス生成 ---
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/repo-page":/work \
+            -v "$GITHUB_WORKSPACE/cert":/cert:ro \
+            -w /work \
+            alpine:latest sh -c "
+
+            # Install abuild
+            apk add --no-cache abuild
+            
+            # Copy pubkey
+            mkdir -p /etc/apk/keys
+            cp /cert/apk_key.rsa.pub /etc/apk/keys/myurar1a-repo.rsa.pub
+            cp /cert/apk_key.rsa.pub /work/myurar1a-repo.rsa.pub
+
+            for ARCH_DIR in */ ; do
+              if [ -d \"\$ARCH_DIR\" ] && [ \"\$ARCH_DIR\" != \"cert/\" ] && ls \"\$ARCH_DIR\"/*.apk >/dev/null 2>&1; then
+                cd \"\$ARCH_DIR\"
+                
+                # Generate index
+                echo \"Generating APK index for \$ARCH_DIR...\"
+                apk index -o APKINDEX.tar.gz *.apk
+                abuild-sign -q -k ../myurar1a-repo.rsa APKINDEX.tar.gz
+                cd ..
+              fi
+            done
+          "
+
+          # 不要な空ディレクトリがあれば削除
+          for ARCH_DIR in */; do
+            if [ -d "$ARCH_DIR" ]; then
+              if ! ls "$ARCH_DIR"/*.ipk >/dev/null 2>&1 && ! ls "$ARCH_DIR"/*.apk >/dev/null 2>&1; then
+                echo "Skipping and removing $ARCH_DIR (no packages found)"
+                rm -rf "$ARCH_DIR"
+              fi
+            fi
+          done
+          
+          rm -f usign_key.sec myurar1a-repo.rsa myurar1a-repo.rsa.pub
 
       - name: Deploy to GitHub Pages
         working-directory: repo-page
@@ -373,4 +524,4 @@ jobs:
 
           # 強制プッシュで履歴を上書きしないとリポジトリが肥大化するため注意
           # 容量節約なら --force 推奨
-          git push origin HEAD:gh-pages
+          git push --force origin HEAD:gh-pages
