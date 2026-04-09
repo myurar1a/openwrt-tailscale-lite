@@ -5,6 +5,7 @@ DEFAULT_CRON_SCHEDULE="0 4 * * *"
 CRON_SCRIPT="upd-tailscale.sh"
 INSTALL_DIR="$HOME/scripts"
 INSTALL_PATH="$INSTALL_DIR/$CRON_SCRIPT"
+RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
 
 # --- UI Colors & Formatting ---
 # OpenWrt ash supports echo -e for colors
@@ -55,6 +56,97 @@ ask_yes_no() {
         [yY][eE][sS]|[yY]|"") return 0 ;;
         *) return 1 ;;
     esac
+}
+
+# --- Execution Functions ---
+
+# Action selector shown only when Tailscale is already installed
+ask_already_action() {
+    echo ""
+    echo -e " ${C_BOLD}Tailscale is already installed. Select action:${C_RESET}"
+    echo -e "   ${C_BOLD}1)${C_RESET} Re-install / Update"
+    echo -e "   ${C_BOLD}2)${C_RESET} Uninstall"
+    echo -e "   ${C_BOLD}3)${C_RESET} Skip to Step 8 (Auto-Update Script Setup)"
+    echo -e "   ${C_BOLD}4)${C_RESET} Exit"
+    printf "> "
+    read ALREADY_ACTION
+}
+
+do_uninstall() {
+    print_header "Uninstalling Tailscale"
+
+    # Stop and disable the Tailscale service
+    print_info "Stopping Tailscale service..."
+    tailscale down 2>/dev/null || true
+    /etc/init.d/tailscale stop 2>/dev/null || true
+    /etc/init.d/tailscale disable 2>/dev/null || true
+
+    # Remove package
+    print_info "Removing Tailscale package..."
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        apk del tailscale 2>/dev/null && print_success "Package removed." || print_warn "Package not found, skipping."
+    else
+        opkg remove tailscale 2>/dev/null && print_success "Package removed." || print_warn "Package not found, skipping."
+    fi
+
+    # Remove cron job
+    if crontab -l 2>/dev/null | grep -q "$INSTALL_PATH"; then
+        print_info "Removing cron job..."
+        crontab -l 2>/dev/null | grep -v "$INSTALL_PATH" | crontab -
+        /etc/init.d/cron restart
+        print_success "Cron job removed."
+    else
+        print_info "No cron job found, skipping."
+    fi
+
+    # Remove auto-update script
+    if [ -f "$INSTALL_PATH" ]; then
+        print_info "Removing auto-update script..."
+        rm -f "$INSTALL_PATH"
+        print_success "Script removed: $INSTALL_PATH"
+    else
+        print_info "Auto-update script not found, skipping."
+    fi
+
+    # Remove repository config and public key
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        rm -f /etc/apk/keys/myurar1a-repo.rsa.pub
+        rm -f /etc/apk/repositories.d/custom_tailscale.list
+    else
+        sed -i '/custom_tailscale/d' /etc/opkg/customfeeds.conf 2>/dev/null || true
+    fi
+    print_success "Repository config and key removed."
+
+    # Remove network and firewall UCI config
+    if ask_yes_no "Remove 'tailscale' interface and firewall zone from UCI config?"; then
+        print_info "Removing network interface..."
+        uci delete network.tailscale 2>/dev/null || print_warn "Interface 'tailscale' not found in UCI, skipping."
+        uci delete network.globals.packet_steering 2>/dev/null || true
+
+        print_info "Removing firewall rules..."
+        # Remove forwarding rules referencing tailscale (iterate in reverse to keep indices valid)
+        for idx in $(uci show firewall | grep -E "forwarding\.[0-9]+\.src='tailscale'|forwarding\.[0-9]+\.dest='tailscale'" | grep -o '@forwarding\[[0-9]*\]' | sort -t'[' -k2 -rn | uniq); do
+            uci delete firewall.$idx 2>/dev/null || true
+        done
+        # Remove firewall zone named tailscale
+        for idx in $(uci show firewall | grep "zone\.[0-9]*.name='tailscale'" | grep -o '@zone\[[0-9]*\]' | sort -t'[' -k2 -rn | uniq); do
+            uci delete firewall.$idx 2>/dev/null || true
+        done
+
+        uci commit network
+        uci commit firewall
+        /etc/init.d/network reload
+        /etc/init.d/firewall reload
+        print_success "Network and firewall configuration removed."
+    else
+        print_info "Skipping UCI config removal."
+    fi
+
+    echo ""
+    echo -e "${C_BLUE}========================================================${C_RESET}"
+    echo -e "${C_GREEN}${C_BOLD}   Uninstall Complete!   ${C_RESET}"
+    echo -e "${C_BLUE}========================================================${C_RESET}"
+    echo ""
 }
 
 # ---------------------
@@ -118,20 +210,28 @@ print_header "[2/8] Check installed list"
 if [ "$PKG_MANAGER" = "apk" ]; then
     if apk info -e tailscale >/dev/null 2>&1; then
         print_warn "Tailscale is already installed."
-        if ask_yes_no "Re-install/Update to ensure latest version?"; then
-            print_info "Removing existing installation..."
-            echo ""
-            echo ">> apk del tailscale"
-            apk del tailscale
-        else
-            if ask_yes_no "Exit the installer? (No: Skip to Step.8 Auto-Update Script Setup)"; then
-                print_info "Exiting installer."
+        ask_already_action
+        case "$ALREADY_ACTION" in
+            1)
+                print_info "Removing existing installation..."
+                echo ""
+                echo ">> apk del tailscale"
+                apk del tailscale
+                ;;
+            2)
+                do_uninstall
                 exit 0
-            else
+                ;;
+            3)
                 print_info "Skipping to Step 8..."
                 SKIP_INSTALL=true
-            fi
-        fi
+                ;;
+            *)
+                print_info "Exiting installer."
+                exit 0
+                ;;
+
+        esac
     else
         print_info "Tailscale is not installed. Proceeding with installation..."
     fi
@@ -139,27 +239,34 @@ else
     INSTALLED=$(opkg list-installed tailscale | awk '{print $3}')
     if [ -n "$INSTALLED" ]; then
         print_warn "Tailscale is already installed ($INSTALLED)."
-        if ask_yes_no "Re-install/Update to ensure latest version?"; then
-            print_info "Removing existing installation..."
-            echo ""
-            echo ">> opkg remove tailscale"
-            opkg remove tailscale
-        else
-            if ask_yes_no "Exit the installer? (No: Skip to Step.8 Auto-Update Script Setup)"; then
-                print_info "Exiting installer."
+        ask_already_action
+        case "$ALREADY_ACTION" in
+            1)
+                print_info "Removing existing installation..."
+                echo ""
+                echo ">> opkg remove tailscale"
+                opkg remove tailscale
+                ;;
+            2)
+                do_uninstall
                 exit 0
-            else
+                ;;
+            3)
                 print_info "Skipping to Step 8..."
                 SKIP_INSTALL=true
-            fi
-        fi
+                ;;
+            *)
+                print_info "Exiting installer."
+                exit 0
+                ;;
+        esac
     else
         print_info "Tailscale is not installed. Proceeding with installation..."
     fi
 fi
 
 
-if [ -z "$SKIP_INSTALL" ]; then
+if [ -z "$SKIP_INSTALL" ]; then # start of SKIP_INSTALL block
 # --- Step 3 ---
 print_header "[3/8] Check Repository"
 print_info "Checking repository availability..."
@@ -181,7 +288,6 @@ print_success "Repository found."
 
 # --- Step 4 ---
 print_header "[4/8] Installing Public Key"
-RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
 USIGN_PUBKEY_NAME="usign_key.pub"
 
 if [ "$PKG_MANAGER" = "apk" ]; then
@@ -237,6 +343,11 @@ if [ "$PKG_MANAGER" = "apk" ]; then
         print_error "'apk update' failed. Check internet connection."
         exit 1
     fi
+    print_info "Installing dependencies..."
+    echo ""
+    echo ">> apk add ca-bundle kmod-tun libc"
+    apk apk add ca-bundle kmod-tun libc
+    echo ""
     print_info "Installing Tailscale package..."
     echo ""
     echo ">> apk add tailscale"
@@ -253,9 +364,9 @@ else
     opkg install tailscale
     print_success "Tailscale installed."
 fi
-
-
 fi # end of SKIP_INSTALL block
+
+
 # --- Step 7 ---
 print_header "[7/8] Auto-Update Script Setup"
 
