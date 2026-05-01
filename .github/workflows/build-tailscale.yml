@@ -1,4 +1,4 @@
-name: Build Small Tailscale
+name: Build Lightweight Tailscale
 
 on:
   push:
@@ -168,7 +168,7 @@ jobs:
       - name: Install UPX
         run: sudo apt-get install -y upx-ucl
 
-      - name: Build Small Tailscale
+      - name: Build Lightweight Tailscale
         working-directory: tailscale-src
         env:
           GOOS: linux
@@ -284,7 +284,7 @@ jobs:
             {
               echo "pkgname = tailscale"
               echo "pkgver = ${VERSION_NUM}-r1"
-              echo "pkgdesc = Auto-generated small build for OpenWrt."
+              echo "pkgdesc = Auto-generated lightweight Tailscale build for OpenWrt."
               echo "url = https://github.com/${{ github.repository }}"
               echo "builddate = $(date +%s)"
               echo "packager = GitHub Actions <github-actions[bot]@users.noreply.github.com>"
@@ -367,9 +367,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.init.outputs.version }}
-          name: Small Tailscale ${{ needs.init.outputs.version }}
+          name: Tailscale Lite ${{ needs.init.outputs.version }}
           body: |
-            Auto-generated small build for OpenWrt.
+            Auto-generated lightweight tailscale build for OpenWrt.
             Upstream: https://github.com/tailscale/tailscale/releases/tag/${{ needs.init.outputs.version }}
             
             **Build Tags:** `${{ needs.init.outputs.build_tags }}`
