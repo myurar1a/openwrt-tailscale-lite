@@ -5,7 +5,7 @@ DEFAULT_CRON_SCHEDULE="0 4 * * *"
 CRON_SCRIPT="upd-tailscale.sh"
 INSTALL_DIR="$HOME/scripts"
 INSTALL_PATH="$INSTALL_DIR/$CRON_SCRIPT"
-RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main"
+RAW_URL="https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-lite/refs/heads/main"
 
 # --- UI Colors & Formatting ---
 # OpenWrt ash supports echo -e for colors
@@ -270,7 +270,7 @@ if [ -z "$SKIP_INSTALL" ]; then # start of SKIP_INSTALL block
 # --- Step 3 ---
 print_header "[3/8] Check Repository"
 print_info "Checking repository availability..."
-REPO_URL="https://myurar1a.github.io/openwrt-tailscale-small"
+REPO_URL="https://myurar1a.github.io/openwrt-tailscale-lite"
 
 if [ "$PKG_MANAGER" = "apk" ]; then
     CHECK_FILE="APKINDEX.tar.gz"

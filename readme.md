@@ -1,4 +1,4 @@
-# Small Tailscale for OpenWrt
+# Lightweight Tailscale for OpenWrt
 Automated build of a stripped-down, UPX-compressed [Tailscale](https://tailscale.com/) package for OpenWrt devices with limited storage.
 
 ## Features
@@ -30,7 +30,7 @@ Run the following command on your OpenWrt router.
 This script handles dependencies, repository setup, installation, and auto-update configuration.
 
 ```sh
-sh -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/install.sh)"
+sh -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-lite/refs/heads/main/install.sh)"
 ```
 
 ### What this installer does:
@@ -63,12 +63,12 @@ If you prefer to configure it manually:
 ### For OpenWrt 25.12+ (Apk)
 1. **Add Signature**:
    ```sh
-   wget -q --no-check-certificate -O "/etc/apk/keys/myurar1a-repo.rsa.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/apk_key.rsa.pub"
+   wget -q --no-check-certificate -O "/etc/apk/keys/myurar1a-repo.rsa.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-lite/refs/heads/main/cert/apk_key.rsa.pub"
    ```
 
 2. **Add Repository**:
    ```sh
-   echo "https://myurar1a.github.io/openwrt-tailscale-small" >> "/etc/apk/repositories.d/custom_tailscale.list"
+   echo "https://myurar1a.github.io/openwrt-tailscale-lite" >> "/etc/apk/repositories.d/custom_tailscale.list"
    ```
 
 3. **Install**:
@@ -80,14 +80,14 @@ If you prefer to configure it manually:
 ### For OpenWrt 24.10- (Opkg)
 1. **Add Signature**:
    ```sh
-   wget -q --no-check-certificate -O "/tmp/usign_key.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-small/refs/heads/main/cert/usign_key.pub"
+   wget -q --no-check-certificate -O "/tmp/usign_key.pub" "https://raw.githubusercontent.com/myurar1a/openwrt-tailscale-lite/refs/heads/main/cert/usign_key.pub"
    opkg-key add "/tmp/usign_key.pub"
    rm "/tmp/usign_key.pub"
    ```
 
 2. **Add Repository**:
    ```sh
-   echo "src/gz custom_tailscale https://myurar1a.github.io/openwrt-tailscale-small/$(opkg print-architecture | awk 'END {print $2}')" >> /etc/opkg/customfeeds.conf
+   echo "src/gz custom_tailscale https://myurar1a.github.io/openwrt-tailscale-lite/$(opkg print-architecture | awk 'END {print $2}')" >> /etc/opkg/customfeeds.conf
    ```
 
 3. **Install**:
